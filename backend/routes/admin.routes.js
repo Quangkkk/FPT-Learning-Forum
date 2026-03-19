@@ -13,7 +13,6 @@ router.patch("/users/:id/toggle", verifyToken, verifyAdmin, async (req, res) => 
             return res.status(404).json({ message: "User không tồn tại" });
         }
 
-        // ❗ không cho tự deactivate chính mình
         if (user._id.toString() === req.user.id) {
             return res.status(400).json({ message: "Không thể tự khóa chính mình" });
         }
