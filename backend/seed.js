@@ -11,23 +11,27 @@ const seedData = async () => {
         name: "Student",
         email: "student@fpt.edu.vn",
         password: "123456",
-        role: "student"
+        role: "student",
+        is_active: true
       },
       {
         name: "Moderator",
         email: "mod@fpt.edu.vn",
         password: "123456",
-        role: "moderator"
+        role: "moderator",
+        is_active: true
       },
       {
         name: "Admin",
         email: "admin@fpt.edu.vn",
         password: "123456",
-        role: "admin"
+        role: "admin",
+        is_active: true
       }
     ]);
     console.log("🌱 Seeded users");
   }
+
 
   const student = await User.findOne({ role: "student" });
   const moderator = await User.findOne({ role: "moderator" });
