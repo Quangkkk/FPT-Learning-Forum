@@ -22,6 +22,7 @@ const User = require("./models/User");
 const Post = require("./models/Post");
 const Comment = require("./models/Comment");
 const Report = require("./models/Report");
+const { verifyToken, verifyAdmin, verifyModerator } = require("./middleware/auth.middleware");
 
 
 // ================= AUTH =================
@@ -116,11 +117,15 @@ app.post("/api/posts", async (req, res) => {
   const post = await Post.create(req.body);
   res.json(post);
 });
-
-app.patch("/api/posts/:id/status", async (req, res) => {
+app.patch("/api/posts/:id/status", verifyModerator, async (req, res) => {
   const { status } = req.body;
-  await Post.findByIdAndUpdate(req.params.id, { status });
-  res.json({ message: "Updated" });
+
+  try {
+    await Post.findByIdAndUpdate(req.params.id, { status });
+    res.json({ message: "Post status updated" });
+  } catch (err) {
+    res.status(500).json({ message: "Error updating post" });
+  }
 });
 
 
