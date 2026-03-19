@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
     enum: ["student", "moderator", "admin"],
     default: "student"
   },
-  is_active: {
+  active: {
     type: Boolean,
     default: true
   }
