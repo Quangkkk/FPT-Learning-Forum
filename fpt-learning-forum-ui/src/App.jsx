@@ -15,6 +15,8 @@ import Members from './pages/Members'
 import Notifications from './pages/Notifications'
 import Moderator from './pages/Moderator'
 import Admin from './pages/Admin'
+import AdminTopic from './pages/AdminTopics'
+import AdminCategories from './pages/AdminCategories'
 
 export default function App() {
   return (
@@ -32,7 +34,8 @@ export default function App() {
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/moderator" element={<Moderator />} />
           <Route path="/admin" element={<Admin />} />
-
+          <Route path="/admin/topics" element={<AdminTopic />} />
+          <Route path="/admin/categories" element={<AdminCategories />} />
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
