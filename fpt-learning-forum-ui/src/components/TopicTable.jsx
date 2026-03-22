@@ -74,7 +74,9 @@ export default function TopicTable({ posts, forum, showTopic = true }) {
                 </td>
 
                 <td className="hidden px-3 py-3 md:table-cell">
-                  {usersById[p.authorId]?.name || 'Ẩn danh'}
+                  {p.isAnonymous
+                    ? "Ẩn danh"
+                    : (p.authorId?.email || p.authorId?.name || "Ẩn danh")}
                 </td>
 
                 <td className="hidden px-3 py-3 lg:table-cell">

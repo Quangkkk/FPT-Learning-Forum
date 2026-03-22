@@ -43,7 +43,14 @@ function TopBar() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value
+              setQ(value)
+
+              if (value.trim() === "") {
+                nav("/")
+              }
+            }}
             placeholder="Tìm kiếm…"
             className="w-full rounded-xl bg-white px-10 py-2 text-sm outline-none ring-1 ring-sky-200 focus:ring-2 focus:ring-white"
           />
@@ -143,13 +150,25 @@ function RightSidebar() {
   const { role } = useAuth()
   const [forum, setForum] = React.useState(null)
 
+  const [keyword, setKeyword] = React.useState("")
+  const [users, setUsers] = React.useState([])
+
   React.useEffect(() => {
     fetch("http://localhost:5000/api/forum")
       .then(res => res.json())
       .then(data => setForum(data))
-      .catch(err => console.error(err))
   }, [])
 
+  React.useEffect(() => {
+    if (!keyword) {
+      setUsers([])
+      return
+    }
+
+    fetch(`http://localhost:5000/api/search/users?q=${keyword}`)
+      .then(res => res.json())
+      .then(data => setUsers(data))
+  }, [keyword])
   return (
     <aside className="hidden w-[320px] shrink-0 lg:block">
       <div className="sticky top-4 space-y-4">
@@ -157,15 +176,27 @@ function RightSidebar() {
         {/* Search */}
         <div className="rounded-2xl bg-white p-4 shadow-soft">
           <div className="text-sm font-semibold">Tìm thành viên</div>
+
           <div className="mt-2">
             <input
-              placeholder="Tên…"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="Tên..."
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-200"
             />
           </div>
-          <div className="mt-3 text-xs text-slate-500">(Demo UI – chưa nối DB)</div>
-        </div>
 
+          <div className="mt-2 space-y-1">
+            {users.map((u) => (
+              <div
+                key={u._id}
+                className="rounded-lg px-2 py-1 text-sm hover:bg-slate-100"
+              >
+                {u.name || u.email}
+              </div>
+            ))}
+          </div>
+        </div>
         {/* Recommended Topics */}
         <div className="rounded-2xl bg-white p-4 shadow-soft">
           <div className="text-sm font-semibold">Môn học nổi bật</div>

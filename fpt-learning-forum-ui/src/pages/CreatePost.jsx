@@ -14,6 +14,9 @@ function CreatePostInner() {
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // 👇 thêm state ẩn danh
+  const [isAnonymous, setIsAnonymous] = useState(false)
+
   useEffect(() => {
     fetch("/api/forum")
       .then(res => res.json())
@@ -43,7 +46,8 @@ function CreatePostInner() {
           topicId,
           title: title.trim(),
           content: content.trim(),
-          authorId: auth.user._id
+          authorId: auth.user._id,
+          isAnonymous   // 👈 gửi lên backend
         })
       })
 
@@ -69,6 +73,8 @@ function CreatePostInner() {
       <Card>
         <CardBody>
           <form onSubmit={submit} className="space-y-3">
+
+            {/* Chủ đề */}
             <div>
               <label className="text-sm font-semibold">Chủ đề</label>
               <select
@@ -84,6 +90,7 @@ function CreatePostInner() {
               </select>
             </div>
 
+            {/* Tiêu đề */}
             <div>
               <label className="text-sm font-semibold">Tiêu đề</label>
               <input
@@ -93,6 +100,7 @@ function CreatePostInner() {
               />
             </div>
 
+            {/* Nội dung */}
             <div>
               <label className="text-sm font-semibold">Nội dung</label>
               <textarea
@@ -103,6 +111,17 @@ function CreatePostInner() {
               />
             </div>
 
+            {/* 👇 checkbox ẩn danh */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isAnonymous}
+                onChange={(e) => setIsAnonymous(e.target.checked)}
+              />
+              <label className="text-sm">Đăng bài ẩn danh</label>
+            </div>
+
+            {/* nút đăng */}
             <div className="flex justify-end">
               <button
                 disabled={saving}
@@ -111,6 +130,7 @@ function CreatePostInner() {
                 {saving ? 'Đang đăng…' : 'Đăng bài'}
               </button>
             </div>
+
           </form>
         </CardBody>
       </Card>

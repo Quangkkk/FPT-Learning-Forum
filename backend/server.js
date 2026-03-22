@@ -73,25 +73,45 @@ app.post("/api/auth/login", async (req, res) => {
 
 
 // ================= POSTS =================
-app.get("/api/posts", async (req, res) => {
-  const { topicId } = req.query;
-  const filter = topicId ? { topicId } : {};
-
-  const posts = await Post.find(filter).sort({ createdAt: -1 });
-  res.json(posts);
-});
-
-app.get("/api/posts/:id", async (req, res) => {
-  const post = await Post.findById(req.params.id);
-  const comments = await Comment.find({ postId: req.params.id });
-
-  res.json({ post, comments });
-});
 
 app.post("/api/posts", async (req, res) => {
-  const post = await Post.create(req.body);
-  res.json(post);
-});
+  try {
+    const { title, content, topicId, authorId, isAnonymous } = req.body
+
+    const post = await Post.create({
+      title,
+      content,
+      topicId,
+      authorId,
+      isAnonymous
+    })
+
+    res.json(post)
+  } catch (err) {
+    res.status(500).json({ message: "Create post error" })
+  }
+})
+app.get("/api/posts", async (req, res) => {
+  const { topicId } = req.query
+
+  const filter = topicId ? { topicId } : {}
+
+  const posts = await Post.find(filter)
+    .populate("authorId", "name email")
+    .sort({ createdAt: -1 })
+
+  res.json(posts)
+})
+
+app.get("/api/posts/:id", async (req, res) => {
+  const post = await Post.findById(req.params.id)
+    .populate("authorId", "email name")
+
+  const comments = await Comment.find({ postId: req.params.id })
+
+  res.json({ post, comments })
+})
+
 
 app.patch("/api/posts/:id/status", async (req, res) => {
   const { status } = req.body;
@@ -139,6 +159,40 @@ app.get("/api/admin/stats", async (req, res) => {
     })
   } catch (err) {
     res.status(500).json({ message: "Server error" })
+  }
+})
+// ================= SEARCH POSTS =================
+app.get("/api/search/posts", async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q) return res.json([]);
+
+    const posts = await Post.find({
+      title: { $regex: q, $options: "i" } // tìm gần đúng, không phân biệt hoa thường
+    }).sort({ createdAt: -1 });
+
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: "Search error" });
+  }
+});
+
+// ================= SEARCH USERS =================
+// ================= SEARCH USERS =================
+app.get("/api/search/users", async (req, res) => {
+  try {
+    const { q } = req.query
+
+    if (!q) return res.json([])
+
+    const users = await User.find({
+      name: { $regex: q, $options: "i" }
+    }).select("-password")
+
+    res.json(users)
+  } catch (err) {
+    res.status(500).json({ message: "Search error" })
   }
 })
 

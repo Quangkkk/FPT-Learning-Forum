@@ -90,8 +90,10 @@ export default function PostDetail() {
             <div>
               <div className="text-lg font-bold">{post.title}</div>
               <div className="mt-1 text-xs text-slate-500">
-                {post.author?.name || 'Ẩn danh'} •{' '}
-                {new Date(post.createdAt).toLocaleString('vi-VN')}
+                {post.isAnonymous
+                  ? "Ẩn danh"
+                  : (post.authorId?.email || post.authorId?.name || "Ẩn danh")
+                } • {new Date(post.createdAt).toLocaleString("vi-VN")}
               </div>
             </div>
 
