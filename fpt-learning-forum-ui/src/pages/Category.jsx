@@ -7,19 +7,19 @@ export default function Category() {
   const [forum, setForum] = useState(null)
 
   useEffect(() => {
-    fetch("/api/forum")
-      .then(res => res.json())
-      .then(data => setForum(data))
-      .catch(err => console.error(err))
+    fetch('/api/forum')
+      .then((res) => res.json())
+      .then((data) => setForum(data))
+      .catch((err) => console.error(err))
   }, [])
 
-  if (!forum) return <div className="p-6">Loading...</div>
+  if (!forum) return <div className="app-surface rounded-[28px] p-6">Loading...</div>
 
   const cat = forum?.categories?.find((c) => c.id === categoryId)
 
   if (!cat) {
     return (
-      <div className="rounded-2xl bg-white p-6 shadow-soft">
+      <div className="app-surface rounded-[28px] p-6">
         <div className="text-lg font-semibold">Không tìm thấy chuyên mục</div>
       </div>
     )
@@ -27,10 +27,11 @@ export default function Category() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-grid rounded-2xl border bg-white p-6 shadow-soft">
-        <div className="text-2xl font-bold">{cat.name}</div>
+      <div className="hero-panel bg-grid rounded-[32px] p-6">
+        <div className="section-kicker">Category</div>
+        <div className="mt-2 text-2xl font-bold">{cat.name}</div>
         <div className="mt-1 text-sm text-slate-600">
-          Chọn môn / chủ đề để xem bài viết.
+          Chọn môn hoặc chủ đề để xem bài viết.
         </div>
       </div>
 
@@ -44,14 +45,12 @@ export default function Category() {
               <Link
                 key={t}
                 to={`/topic/${t}`}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-3 hover:bg-slate-50"
+                className="rounded-[24px] border border-[var(--border)] bg-white px-4 py-4 transition hover:-translate-y-0.5 hover:border-[rgba(243,112,33,0.22)] hover:bg-[var(--orange-soft)]"
               >
                 <div className="font-semibold text-slate-900">
                   {forum?.topics?.[t]?.name || t}
                 </div>
-                <div className="text-xs text-slate-500">
-                  Xem thảo luận
-                </div>
+                <div className="text-xs text-slate-500">Xem thảo luận</div>
               </Link>
             ))}
           </div>

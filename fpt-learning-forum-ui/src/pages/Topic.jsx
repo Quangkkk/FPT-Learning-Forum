@@ -18,11 +18,9 @@ export default function Topic() {
     async function load() {
       setLoading(true)
       try {
-        // load forum data
-        const forumRes = await fetch("/api/forum")
+        const forumRes = await fetch('/api/forum')
         const forumData = await forumRes.json()
 
-        // load posts theo topic
         const postRes = await fetch(`/api/posts?topicId=${topicId}`)
         const postData = await postRes.json()
 
@@ -49,8 +47,9 @@ export default function Topic() {
     }
   }, [topicId, role])
 
-  if (loading)
-    return <div className="rounded-2xl bg-white p-6 shadow-soft">Đang tải…</div>
+  if (loading) {
+    return <div className="app-surface rounded-[28px] p-6">Đang tải...</div>
+  }
 
   const topicName = forum?.topics?.[topicId]?.name || topicId
 
@@ -59,7 +58,8 @@ export default function Topic() {
       <Card>
         <CardBody className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-lg font-semibold">{topicName}</div>
+            <div className="section-kicker">Topic</div>
+            <div className="mt-1 text-lg font-semibold">{topicName}</div>
             <div className="text-sm text-slate-600">
               Các bài viết trong chủ đề này.
             </div>
@@ -67,7 +67,7 @@ export default function Topic() {
 
           <Link
             to={`/create?topic=${encodeURIComponent(topicId)}`}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            className="btn-secondary rounded-full px-5 py-3 text-sm font-bold"
           >
             Tạo bài viết
           </Link>

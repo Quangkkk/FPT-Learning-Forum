@@ -1,5 +1,19 @@
 const mongoose = require("mongoose");
 
+const mediaSchema = new mongoose.Schema({
+  kind: {
+    type: String,
+    enum: ["image", "video"],
+    required: true
+  },
+  name: String,
+  mimeType: String,
+  url: {
+    type: String,
+    required: true
+  }
+}, { _id: false });
+
 const postSchema = new mongoose.Schema({
   title: String,
   content: String,
@@ -32,6 +46,8 @@ const postSchema = new mongoose.Schema({
 
   videoUrls: {
     type: [String],
+  media: {
+    type: [mediaSchema],
     default: []
   }
 
