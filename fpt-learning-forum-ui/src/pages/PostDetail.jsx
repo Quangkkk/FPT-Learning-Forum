@@ -5,6 +5,41 @@ import MarkdownLite from '../components/MarkdownLite'
 import { Flag, Send } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 
+function normalizePostMedia(post) {
+  const sources = Array.isArray(post?.media) ? post.media : []
+
+  return sources
+    .map((item, index) => {
+      if (!item) return null
+
+      if (typeof item === 'string') {
+        const isVideo = item.startsWith('data:video/') || /\.(mp4|webm|ogg|mov)$/i.test(item)
+        return {
+          kind: isVideo ? 'video' : 'image',
+          name: `Tệp đính kèm ${index + 1}`,
+          url: item
+        }
+      }
+
+      const url = item.url || item.src || item.path
+      if (!url) return null
+
+      const mimeType = String(item.mimeType || item.type || '')
+      const isVideo =
+        item.kind === 'video' ||
+        mimeType.startsWith('video/') ||
+        String(url).startsWith('data:video/') ||
+        /\.(mp4|webm|ogg|mov)$/i.test(String(url))
+
+      return {
+        kind: isVideo ? 'video' : 'image',
+        name: item.name || `Tệp đính kèm ${index + 1}`,
+        url
+      }
+    })
+    .filter(Boolean)
+}
+
 export default function PostDetail() {
   const { postId } = useParams()
   const nav = useNavigate()
@@ -36,6 +71,8 @@ export default function PostDetail() {
 
   if (loading) return <div className="app-surface rounded-[28px] p-6">Đang tải...</div>
   if (!post) return null
+
+  const mediaItems = normalizePostMedia(post)
 
   async function submitComment(e) {
     e.preventDefault()
@@ -107,6 +144,31 @@ export default function PostDetail() {
 
         <CardBody>
           <MarkdownLite text={post.content} />
+
+          {mediaItems.length > 0 && (
+            <div className="mt-5 grid gap-4">
+              {mediaItems.map((item, index) => (
+                <div key={`${item.url}-${index}`} className="overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--bg)]">
+                  {item.kind === 'video' ? (
+                    <video
+                      controls
+                      className="max-h-[420px] w-full bg-black"
+                      src={item.url}
+                    />
+                  ) : (
+                    <img
+                      src={item.url}
+                      alt={item.name || `media-${index + 1}`}
+                      className="max-h-[520px] w-full object-cover"
+                    />
+                  )}
+                  <div className="px-4 py-3 text-sm text-slate-600">
+                    {item.name || `Tệp đính kèm ${index + 1}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {reportOpen && (
             <div className="mt-4 rounded-2xl border border-orange-100 bg-[var(--orange-soft)] p-4">

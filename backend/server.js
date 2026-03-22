@@ -7,7 +7,7 @@ const app = express();
 const jwt = require("jsonwebtoken");
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 
 // CONNECT DB
 mongoose.connect(process.env.MONGO_URI)
@@ -99,16 +99,35 @@ app.post("/api/auth/login", async (req, res) => {
 
 // ================= POSTS =================
 
+function normalizeMedia(items = []) {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .filter((item) => item && typeof item.url === "string")
+    .map((item) => {
+      const mimeType = String(item.mimeType || "");
+      const kind = mimeType.startsWith("video/") ? "video" : "image";
+
+      return {
+        kind,
+        name: item.name || "attachment",
+        mimeType,
+        url: item.url
+      };
+    });
+}
+
 app.post("/api/posts", async (req, res) => {
   try {
-    const { title, content, topicId, authorId, isAnonymous } = req.body
+    const { title, content, topicId, authorId, isAnonymous, media } = req.body
 
     const post = await Post.create({
       title,
       content,
       topicId,
       authorId,
-      isAnonymous
+      isAnonymous,
+      media: normalizeMedia(media)
     })
 
     res.json(post)
@@ -135,11 +154,6 @@ app.get("/api/posts/:id", async (req, res) => {
   const comments = await Comment.find({ postId: req.params.id })
 
   res.json({ post, comments });
-});
-
-app.post("/api/posts", async (req, res) => {
-  const post = await Post.create(req.body);
-  res.json(post);
 });
 
 app.patch("/api/posts/:id/status", async (req, res) => {
