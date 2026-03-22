@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, verifyAdmin } = require("../middleware/auth.middleware");
+const { verifyToken, verifyAdmin, verifyModerator } = require("../middleware/auth.middleware");
 
 const User = require("../models/User");
 const Topic = require("../models/Topic");
@@ -48,8 +48,8 @@ router.get("/topics", async (req, res) => {
     }
 });
 
-// ✅ ADMIN
-router.post("/topics", verifyToken, verifyAdmin, async (req, res) => {
+// ✅ MODERATOR / ADMIN
+router.post("/topics", verifyToken, verifyModerator, async (req, res) => {
     try {
         const { name, categoryId } = req.body;
 
@@ -67,7 +67,11 @@ router.post("/topics", verifyToken, verifyAdmin, async (req, res) => {
         const existing = await Topic.findOne({ slug });
         if (existing) slug += "-" + Date.now();
 
-        const topic = await Topic.create({ name, slug, categoryId });
+        const topic = await Topic.create({
+            name,
+            slug,
+            categoryId
+        });
 
         res.status(201).json({ message: "Topic created", topic });
 
@@ -77,8 +81,8 @@ router.post("/topics", verifyToken, verifyAdmin, async (req, res) => {
     }
 });
 
-// ✅ ADMIN
-router.patch("/topics/:id", verifyToken, verifyAdmin, async (req, res) => {
+// ✅ MODERATOR / ADMIN
+router.patch("/topics/:id", verifyToken, verifyModerator, async (req, res) => {
     try {
         const { name, categoryId } = req.body;
 
@@ -118,8 +122,8 @@ router.patch("/topics/:id", verifyToken, verifyAdmin, async (req, res) => {
     }
 });
 
-// ✅ ADMIN
-router.delete("/topics/:id", verifyToken, verifyAdmin, async (req, res) => {
+// ✅ MODERATOR / ADMIN
+router.delete("/topics/:id", verifyToken, verifyModerator, async (req, res) => {
     try {
         const topic = await Topic.findById(req.params.id);
 

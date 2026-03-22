@@ -18,6 +18,21 @@ const postSchema = new mongoose.Schema({
     type: String,
     enum: ["pending", "approved", "rejected"],
     default: "pending"
+  },
+
+  moderationReason: {
+    type: String,
+    default: ""
+  },
+
+  imageUrls: {
+    type: [String],
+    default: []
+  },
+
+  videoUrls: {
+    type: [String],
+    default: []
   }
 
 }, { timestamps: true });

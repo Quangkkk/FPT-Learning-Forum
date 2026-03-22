@@ -48,10 +48,12 @@ export default function PostDetail() {
     try {
       await fetch(`/api/posts/${postId}/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth?.token}`
+        },
         body: JSON.stringify({
-          content: text,
-          authorId: auth.user._id
+          content: text
         })
       })
       setComment('')
@@ -67,12 +69,14 @@ export default function PostDetail() {
     try {
       await fetch("/api/reports", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth?.token}`
+        },
         body: JSON.stringify({
           targetType: "post",
           targetId: postId,
-          reason,
-          reporterId: auth.user._id
+          reason
         })
       })
       setReportOpen(false)
@@ -109,6 +113,32 @@ export default function PostDetail() {
 
         <CardBody>
           <MarkdownLite text={post.content} />
+
+          {Array.isArray(post.imageUrls) && post.imageUrls.length > 0 ? (
+            <div className="mt-4">
+              <div className="text-sm font-semibold">Ảnh đính kèm</div>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                {post.imageUrls.map((url, idx) => (
+                  <a key={`post-img-${idx}`} href={url} target="_blank" rel="noreferrer">
+                    <img src={url} alt={`post-image-${idx + 1}`} className="h-44 w-full rounded-xl border object-cover" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {Array.isArray(post.videoUrls) && post.videoUrls.length > 0 ? (
+            <div className="mt-4">
+              <div className="text-sm font-semibold">Video đính kèm</div>
+              <div className="mt-2 space-y-3">
+                {post.videoUrls.map((url, idx) => (
+                  <div key={`post-video-${idx}`} className="rounded-xl border p-2">
+                    <video src={url} controls className="h-56 w-full rounded-lg bg-black/5" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {reportOpen && (
             <div className="mt-4 rounded-2xl border bg-amber-50 p-4">

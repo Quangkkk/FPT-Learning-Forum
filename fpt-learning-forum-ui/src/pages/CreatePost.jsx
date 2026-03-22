@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardBody } from '../components/Card'
 import { useAuth, RequireRole } from '../lib/auth'
+import { X } from 'lucide-react'
 
 function CreatePostInner() {
   const nav = useNavigate()
@@ -13,9 +14,36 @@ function CreatePostInner() {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
+  const [images, setImages] = useState([])
+  const [videos, setVideos] = useState([])
 
   // 👇 thêm state ẩn danh
   const [isAnonymous, setIsAnonymous] = useState(false)
+
+  const imagePreviews = useMemo(
+    () => images.map((file) => ({ name: file.name, url: URL.createObjectURL(file) })),
+    [images]
+  )
+
+  const videoPreviews = useMemo(
+    () => videos.map((file) => ({ name: file.name, url: URL.createObjectURL(file) })),
+    [videos]
+  )
+
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach((item) => URL.revokeObjectURL(item.url))
+      videoPreviews.forEach((item) => URL.revokeObjectURL(item.url))
+    }
+  }, [imagePreviews, videoPreviews])
+
+  function removeImageAt(index) {
+    setImages((prev) => prev.filter((_, idx) => idx !== index))
+  }
+
+  function removeVideoAt(index) {
+    setVideos((prev) => prev.filter((_, idx) => idx !== index))
+  }
 
   useEffect(() => {
     fetch("/api/forum")
@@ -37,24 +65,30 @@ function CreatePostInner() {
     setSaving(true)
 
     try {
+      const payload = new FormData()
+      payload.append('topicId', topicId)
+      payload.append('title', title.trim())
+      payload.append('content', content.trim())
+      payload.append('isAnonymous', String(isAnonymous))
+      images.forEach((file) => payload.append('image', file))
+      videos.forEach((file) => payload.append('video', file))
+
       const res = await fetch("/api/posts", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          Authorization: `Bearer ${auth?.token}`
         },
-        body: JSON.stringify({
-          topicId,
-          title: title.trim(),
-          content: content.trim(),
-          authorId: auth.user._id,
-          isAnonymous   // 👈 gửi lên backend
-        })
+        body: payload
       })
 
       const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.message || 'Đăng bài thất bại')
+      }
       nav(`/post/${data._id}`)
     } catch (err) {
       console.error(err)
+      alert(err.message || 'Đăng bài thất bại')
     }
 
     setSaving(false)
@@ -119,6 +153,69 @@ function CreatePostInner() {
                 onChange={(e) => setIsAnonymous(e.target.checked)}
               />
               <label className="text-sm">Đăng bài ẩn danh</label>
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Ảnh đính kèm (nhiều ảnh)</label>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => setImages(Array.from(e.target.files || []))}
+                className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              />
+              <div className="mt-1 text-xs text-slate-500">
+                {images.length ? `${images.length} ảnh đã chọn` : 'Chưa chọn ảnh'}
+              </div>
+              {imagePreviews.length > 0 ? (
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  {imagePreviews.map((item, idx) => (
+                    <div key={`${item.name}-${idx}`} className="relative rounded-xl border p-1">
+                      <img src={item.url} alt={item.name} className="h-24 w-full rounded-lg object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeImageAt(idx)}
+                        className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white hover:bg-black"
+                        aria-label="Xóa ảnh"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Video đính kèm (nhiều video)</label>
+              <input
+                type="file"
+                accept="video/*"
+                multiple
+                onChange={(e) => setVideos(Array.from(e.target.files || []))}
+                className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              />
+              <div className="mt-1 text-xs text-slate-500">
+                {videos.length ? `${videos.length} video đã chọn` : 'Chưa chọn video'}
+              </div>
+              {videoPreviews.length > 0 ? (
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  {videoPreviews.map((item, idx) => (
+                    <div key={`${item.name}-${idx}`} className="relative rounded-xl border p-2">
+                      <video src={item.url} controls className="h-36 w-full rounded-lg bg-black/5" />
+                      <div className="mt-1 truncate text-xs text-slate-500">{item.name}</div>
+                      <button
+                        type="button"
+                        onClick={() => removeVideoAt(idx)}
+                        className="absolute right-2 top-2 rounded-full bg-black/70 p-1 text-white hover:bg-black"
+                        aria-label="Xóa video"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             {/* nút đăng */}

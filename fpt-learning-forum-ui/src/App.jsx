@@ -1,6 +1,6 @@
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './lib/auth'
+import { AuthProvider, RequireRole } from './lib/auth'
 import Shell from './layout/Shell'
 
 import Home from './pages/Home'
@@ -10,6 +10,8 @@ import NewPosts from './pages/NewPosts'
 import PostDetail from './pages/PostDetail'
 import CreatePost from './pages/CreatePost'
 import Login from './pages/Login'
+import Register from './pages/Register'
+import VerifyEmail from './pages/VerifyEmail'
 import Search from './pages/Search'
 import Members from './pages/Members'
 import Notifications from './pages/Notifications'
@@ -28,15 +30,52 @@ export default function App() {
           <Route path="/c/:categoryId" element={<Category />} />
           <Route path="/topic/:topicId" element={<Topic />} />
           <Route path="/post/:postId" element={<PostDetail />} />
-          <Route path="/create" element={<CreatePost />} />
+          <Route
+            path="/create"
+            element={
+              <RequireRole allow={['student', 'moderator', 'admin']}>
+                <CreatePost />
+              </RequireRole>
+            }
+          />
           <Route path="/search" element={<Search />} />
           <Route path="/members" element={<Members />} />
           <Route path="/notifications" element={<Notifications />} />
-          <Route path="/moderator" element={<Moderator />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/admin/topics" element={<AdminTopic />} />
-          <Route path="/admin/categories" element={<AdminCategories />} />
+          <Route
+            path="/moderator"
+            element={
+              <RequireRole allow={['moderator', 'admin']}>
+                <Moderator />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <RequireRole allow={['admin']}>
+                <Admin />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/topics"
+            element={
+              <RequireRole allow={['admin']}>
+                <AdminTopic />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/categories"
+            element={
+              <RequireRole allow={['admin']}>
+                <AdminCategories />
+              </RequireRole>
+            }
+          />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
