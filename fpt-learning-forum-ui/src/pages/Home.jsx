@@ -27,12 +27,12 @@ export default function Home() {
   return (
     <div className="space-y-5">
       <div className="hero-panel bg-grid overflow-hidden rounded-[32px] p-7 md:p-8">
-        <div className="section-kicker">Student Blog System</div>
+        <div className="section-kicker">Cộng đồng học thuật</div>
         <div className="mt-3 max-w-3xl text-3xl font-bold text-slate-900 md:text-4xl">
-          Learning Forum cho sinh viên FPT với màu sắc trẻ, công nghệ và dễ kết nối.
+          Diễn đàn học tập dành cho sinh viên FPT University.
         </div>
         <div className="mt-2 max-w-2xl text-sm text-slate-600">
-          Nơi hỏi đáp theo môn học, chia sẻ tài liệu và kết nối sinh viên với mentor hoặc giảng viên.
+          Trao đổi kiến thức theo môn học, chia sẻ tài liệu và kết nối với bạn học, mentor hoặc giảng viên trong một không gian rõ ràng, dễ sử dụng.
         </div>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
@@ -50,16 +50,16 @@ export default function Home() {
         </div>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-[24px] border border-white/60 bg-white/70 p-4">
-            <div className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--fpt-orange)]">Primary</div>
-            <div className="mt-1 text-sm font-semibold">FPT Orange cho CTA</div>
+            <div className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--fpt-orange)]">Thảo luận</div>
+            <div className="mt-1 text-sm font-semibold">Đặt câu hỏi và nhận phản hồi đúng trọng tâm</div>
           </div>
           <div className="rounded-[24px] border border-white/60 bg-white/70 p-4">
-            <div className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--fpt-blue)]">Secondary</div>
-            <div className="mt-1 text-sm font-semibold">FPT Blue cho điều hướng</div>
+            <div className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--fpt-blue)]">Học liệu</div>
+            <div className="mt-1 text-sm font-semibold">Tập hợp tài liệu, kinh nghiệm và nguồn tham khảo hữu ích</div>
           </div>
           <div className="rounded-[24px] border border-white/60 bg-white/70 p-4">
-            <div className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--fpt-green)]">Accent</div>
-            <div className="mt-1 text-sm font-semibold">FPT Green cho trạng thái tích cực</div>
+            <div className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--fpt-green)]">Kết nối</div>
+            <div className="mt-1 text-sm font-semibold">Mở rộng trao đổi với cộng đồng sinh viên cùng chuyên ngành</div>
           </div>
         </div>
       </div>

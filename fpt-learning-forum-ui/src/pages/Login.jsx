@@ -38,23 +38,23 @@ export default function Login() {
     <div className="mx-auto max-w-5xl">
       <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="hero-panel bg-grid rounded-[32px] p-8">
-          <div className="section-kicker">Welcome Back</div>
-          <div className="mt-3 text-3xl font-bold">Đăng nhập để tham gia cộng đồng học tập FPT.</div>
+          <div className="section-kicker">Chào mừng trở lại</div>
+          <div className="mt-3 text-3xl font-bold">Đăng nhập để tiếp tục học tập và trao đổi cùng cộng đồng FPT.</div>
           <div className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
-            Giao diện mới dùng bộ màu FPT Orange, FPT Blue và FPT Green để tạo cảm giác năng động, công nghệ và gần gũi với sinh viên.
+            Theo dõi bài viết theo môn học, tham gia thảo luận, lưu lại những nội dung quan trọng và quản lý hoạt động của bạn trên diễn đàn.
           </div>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-[24px] bg-white/80 p-4">
-              <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fpt-orange)]">Orange</div>
-              <div className="mt-2 text-sm font-semibold">Nút hành động chính</div>
+              <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fpt-orange)]">Truy cập</div>
+              <div className="mt-2 text-sm font-semibold">Xem lại bài viết và thảo luận đang theo dõi</div>
             </div>
             <div className="rounded-[24px] bg-white/80 p-4">
-              <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fpt-blue)]">Blue</div>
-              <div className="mt-2 text-sm font-semibold">Điều hướng và tìm kiếm</div>
+              <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fpt-blue)]">Tìm kiếm</div>
+              <div className="mt-2 text-sm font-semibold">Tra cứu nhanh nội dung theo môn học và chủ đề</div>
             </div>
             <div className="rounded-[24px] bg-white/80 p-4">
-              <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fpt-green)]">Green</div>
-              <div className="mt-2 text-sm font-semibold">Trạng thái tích cực</div>
+              <div className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fpt-green)]">Theo dõi</div>
+              <div className="mt-2 text-sm font-semibold">Cập nhật phản hồi, thông báo và hoạt động gần đây</div>
             </div>
           </div>
         </div>
@@ -65,7 +65,7 @@ export default function Login() {
               <div className="section-kicker">Demo Account</div>
               <div className="mt-2 text-xl font-bold">Đăng nhập</div>
               <div className="mt-1 text-sm text-slate-600">
-                Dùng tài khoản demo để test role-based UI.
+                Dùng tài khoản demo để kiểm tra giao diện theo từng vai trò.
               </div>
             </CardBody>
           </Card>

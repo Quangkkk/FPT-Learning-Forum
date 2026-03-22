@@ -34,18 +34,20 @@ function TopBar() {
 
   return (
     <header className="border-b border-white/10 bg-[linear-gradient(120deg,#0066B3_0%,#0C7ED1_52%,#0A5D9B_100%)] text-white shadow-[0_22px_48px_rgba(0,102,179,0.24)]">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5 lg:flex-row lg:items-center">
-        <div className="flex flex-1 items-start gap-3">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 lg:flex-row lg:items-center lg:gap-6">
+        <div className="flex min-w-[300px] flex-1 items-start gap-3">
           <div className="rounded-2xl bg-white/12 p-3 backdrop-blur-sm">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <div className="font-['Montserrat'] text-lg font-bold text-white">FPT Learning Forum</div>
-            <div className="text-sm text-white/78">Cộng đồng học tập, chia sẻ tài liệu và kết nối sinh viên FPT University</div>
+          <div className="min-w-0">
+            <div className="font-['Montserrat'] text-xl font-bold leading-none text-white whitespace-nowrap">FPT Learning Forum</div>
+            <div className="mt-2 max-w-[320px] text-sm leading-6 text-white/78">
+              Cộng đồng học tập, chia sẻ tài liệu và kết nối sinh viên FPT University.
+            </div>
           </div>
         </div>
 
-        <form onSubmit={submit} className="relative hidden w-[420px] md:block">
+        <form onSubmit={submit} className="relative hidden w-[360px] md:block xl:w-[420px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={q}
@@ -93,7 +95,7 @@ function TopBar() {
         )}
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 pb-4 md:hidden">
+      <div className="mx-auto max-w-7xl px-4 pb-4 md:hidden">
         <form onSubmit={submit} className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -133,7 +135,7 @@ function CategoryTabs() {
 
   return (
     <div className="border-b border-[var(--border)] bg-white/75 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center gap-2 overflow-x-auto px-4 py-3">
+      <div className="mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto px-4 py-3">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -242,19 +244,24 @@ export default function Shell() {
     <div className="app-shell min-h-screen">
       <TopBar />
       <CategoryTabs />
-      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-5 px-4 py-5 lg:grid-cols-[1fr_320px]">
+      <main className="mx-auto grid max-w-7xl flex-1 grid-cols-1 gap-6 px-4 py-5 lg:grid-cols-[minmax(0,1.25fr)_320px]">
         <div className="min-w-0">
           <Outlet />
         </div>
         <RightSidebar />
       </main>
       <footer className="border-t border-[var(--border)] bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="font-['Montserrat'] text-sm font-bold text-slate-700">FPT Learning Forum</div>
-            <div className="text-xs text-slate-500">Bộ màu áp dụng theo nhận diện FPT dành cho cộng đồng sinh viên.</div>
+            <div className="font-['Montserrat'] text-base font-bold text-slate-800">FPT Learning Forum</div>
+            <div className="max-w-xl text-xs leading-5 text-slate-500">
+              Nền tảng trao đổi học thuật dành cho sinh viên FPT University, hỗ trợ chia sẻ kiến thức, tài liệu và kết nối cộng đồng học tập một cách chuyên nghiệp.
+            </div>
           </div>
-          <div className="text-xs">Demo UI • Learning Forum for FPT University Students</div>
+          <div className="text-right text-xs leading-5 text-slate-500">
+            <div>Academic Community Platform</div>
+            <div>Designed for FPT University Students</div>
+          </div>
         </div>
       </footer>
     </div>

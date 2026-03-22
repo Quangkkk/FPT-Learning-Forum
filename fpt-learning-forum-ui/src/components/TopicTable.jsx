@@ -23,26 +23,26 @@ export default function TopicTable({ posts, forum, showTopic = true }) {
   return (
     <div className="app-surface overflow-hidden rounded-[28px]">
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full table-auto text-[15px]">
           <thead className="bg-[linear-gradient(90deg,rgba(238,247,255,0.96),rgba(255,244,236,0.92))] text-left text-[11px] font-bold uppercase tracking-[0.14em] text-slate-600">
             <tr>
-              <th className="w-14 px-3 py-3">#</th>
-              <th className="px-3 py-3">Chủ đề</th>
-              <th className="hidden px-3 py-3 md:table-cell">Ngày</th>
-              <th className="hidden px-3 py-3 md:table-cell">Tác giả</th>
-              <th className="hidden px-3 py-3 lg:table-cell">Trạng thái</th>
+              <th className="w-16 px-4 py-4">#</th>
+              <th className="min-w-[360px] px-4 py-4">Chủ đề</th>
+              <th className="hidden min-w-[150px] px-4 py-4 md:table-cell">Ngày</th>
+              <th className="hidden min-w-[170px] px-4 py-4 md:table-cell">Tác giả</th>
+              <th className="hidden min-w-[140px] px-4 py-4 lg:table-cell">Trạng thái</th>
             </tr>
           </thead>
           <tbody>
             {posts.map((p, idx) => (
               <tr key={p._id ?? idx} className="border-t border-[var(--border)] transition-colors hover:bg-[rgba(238,247,255,0.46)]">
-                <td className="px-3 py-3">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--fpt-orange),#ff8a3d)] text-xs font-bold text-white shadow-[0_10px_20px_rgba(243,112,33,0.24)]">
+                <td className="px-4 py-5 align-top">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--fpt-orange),#ff8a3d)] text-sm font-bold text-white shadow-[0_10px_20px_rgba(243,112,33,0.24)]">
                     {idx + 1}
                   </span>
                 </td>
 
-                <td className="px-3 py-3">
+                <td className="px-4 py-5">
                   <div className="flex flex-wrap items-center gap-2">
                     {showTopic && (
                       <Badge tone={topicTone(p.topicId)}>
@@ -52,28 +52,28 @@ export default function TopicTable({ posts, forum, showTopic = true }) {
 
                     <Link
                       to={`/post/${p._id}`}
-                      className="font-semibold text-[var(--fpt-blue)] hover:text-[var(--fpt-orange)]"
+                      className="text-[15px] font-semibold leading-7 text-[var(--fpt-blue)] hover:text-[var(--fpt-orange)]"
                     >
                       {p.title}
                     </Link>
                   </div>
 
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="mt-2 text-sm text-slate-500">
                     {p.views} lượt xem • {p.upvotes} upvote
                   </div>
                 </td>
 
-                <td className="hidden px-3 py-3 md:table-cell">
+                <td className="hidden px-4 py-5 align-top text-sm leading-6 md:table-cell">
                   {formatDate(p.createdAt)}
                 </td>
 
-                <td className="hidden px-3 py-3 md:table-cell">
+                <td className="hidden px-4 py-5 align-top text-sm leading-6 md:table-cell">
                   {p.isAnonymous
                     ? 'Ẩn danh'
                     : (p.authorId?.email || p.authorId?.name || 'Ẩn danh')}
                 </td>
 
-                <td className="hidden px-3 py-3 lg:table-cell">
+                <td className="hidden px-4 py-5 align-top lg:table-cell">
                   {p.status === 'pending'
                     ? <Badge tone="amber">Chờ duyệt</Badge>
                     : <Badge tone="green">Đã đăng</Badge>}
