@@ -46,11 +46,12 @@ const postSchema = new mongoose.Schema({
 
   videoUrls: {
     type: [String],
-  media: {
-    type: [mediaSchema],
-    default: []
-  }
+    media: {
+      type: [mediaSchema],
+      default: []
+    }
 
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model("Post", postSchema);

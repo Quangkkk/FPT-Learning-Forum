@@ -31,7 +31,7 @@ export default function Category() {
         <div className="section-kicker">Category</div>
         <div className="mt-2 text-2xl font-bold">{cat.name}</div>
         <div className="mt-1 text-sm text-slate-600">
-          Chọn môn hoặc chủ đề để xem bài viết.
+          Chọn môn học hoặc chủ đề để xem bài viết.
         </div>
       </div>
 

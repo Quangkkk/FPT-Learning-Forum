@@ -1,6 +1,5 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Card, CardBody } from '../components/Card'
 import { useAuth } from '../lib/auth'
 
@@ -39,9 +38,13 @@ export default function Login() {
 
       if (fromPath && fromPath !== '/login') {
         nav(fromPath, { replace: true })
-      } else if (auth.user.role === 'admin') nav('/admin', { replace: true })
-      else if (auth.user.role === 'moderator') nav('/moderator', { replace: true })
-      else nav('/', { replace: true })
+      } else if (auth.user.role === 'admin') {
+        nav('/admin', { replace: true })
+      } else if (auth.user.role === 'moderator') {
+        nav('/moderator', { replace: true })
+      } else {
+        nav('/', { replace: true })
+      }
     } catch (err) {
       setError(err?.message || 'Đăng nhập thất bại')
     } finally {
@@ -54,9 +57,11 @@ export default function Login() {
       <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="hero-panel bg-grid rounded-[32px] p-8">
           <div className="section-kicker">Chào mừng trở lại</div>
-          <div className="mt-3 text-3xl font-bold">Đăng nhập để tiếp tục học tập và trao đổi cùng cộng đồng FPT.</div>
+          <div className="mt-3 text-3xl font-bold">
+            Đăng nhập để tiếp tục học tập và trao đổi cùng cộng đồng FPT.
+          </div>
           <div className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
-            Theo dõi bài viết theo môn học, tham gia thảo luận, lưu lại những nội dung quan trọng và quản lý hoạt động của bạn trên diễn đàn.
+            Theo dõi bài viết theo môn học, tham gia thảo luận và quản lý hoạt động của bạn trên diễn đàn một cách thuận tiện.
           </div>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-[24px] bg-white/80 p-4">
@@ -113,22 +118,24 @@ export default function Login() {
                   </div>
                 )}
 
-            <button
-              disabled={submitting}
-              className="w-full rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
-            >
-              {submitting ? 'Đang đăng nhập…' : 'Đăng nhập'}
-            </button>
-          </form>
+                <button
+                  disabled={submitting}
+                  className="btn-primary w-full rounded-full px-4 py-3 text-sm font-bold disabled:opacity-60"
+                >
+                  {submitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
+                </button>
+              </form>
 
-          <div className="mt-3 text-sm text-slate-600">
-            Chưa có tài khoản?{' '}
-            <Link to="/register" className="font-semibold text-sky-700 hover:underline">
-              Đăng ký ngay
-            </Link>
-          </div>
-        </CardBody>
-      </Card>
+              <div className="mt-3 text-sm text-slate-600">
+                Chưa có tài khoản?{' '}
+                <Link to="/register" className="font-semibold text-[var(--fpt-blue)] hover:underline">
+                  Đăng ký ngay
+                </Link>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }
