@@ -34,6 +34,18 @@ const postSchema = new mongoose.Schema({
     default: "pending"
   },
 
+  moderationReason: {
+    type: String,
+    default: ""
+  },
+
+  imageUrls: {
+    type: [String],
+    default: []
+  },
+
+  videoUrls: {
+    type: [String],
   media: {
     type: [mediaSchema],
     default: []

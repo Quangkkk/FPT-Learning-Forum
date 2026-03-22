@@ -1,5 +1,10 @@
 const jwt = require("jsonwebtoken");
 
+function extractBearerToken(authHeader = "") {
+  if (!authHeader.startsWith("Bearer ")) return null;
+  return authHeader.split(" ")[1];
+}
+
 exports.verifyToken = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -10,11 +15,11 @@ exports.verifyToken = (req, res, next) => {
       });
     }
 
-    const token = authHeader.split(" ")[1];
+    const token = extractBearerToken(authHeader);
 
     if (!token) {
       return res.status(401).json({
-        message: "Token không tồn tại"
+        message: "Định dạng token không hợp lệ"
       });
     }
 
@@ -29,21 +34,28 @@ exports.verifyToken = (req, res, next) => {
     });
   }
 };
-exports.verifyAdmin = (req, res, next) => {
-  try {
+
+function requireRoles(roles = []) {
+  return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
         message: "Chưa xác thực người dùng"
       });
     }
 
-    if (req.user.role !== "admin") {
+    if (!roles.includes(req.user.role)) {
       return res.status(403).json({
-        message: "Không có quyền admin"
+        message: "Bạn không có quyền truy cập"
       });
     }
 
     next();
+  };
+}
+
+exports.verifyAdmin = (req, res, next) => {
+  try {
+    return requireRoles(["admin"])(req, res, next);
   } catch (err) {
     return res.status(500).json({
       message: "Lỗi verifyAdmin",
@@ -54,25 +66,11 @@ exports.verifyAdmin = (req, res, next) => {
 
 exports.verifyModerator = (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "No token provided" });
-    }
-
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    if (decoded.role !== "moderator") {
-      return res.status(403).json({
-        message: "Chỉ moderator mới được phép"
-      });
-    }
-
-    req.user = decoded;
-    next();
+    return requireRoles(["moderator", "admin"])(req, res, next);
   } catch (err) {
-    return res.status(401).json({ message: "Invalid token" });
+    return res.status(500).json({ message: "Lỗi verifyModerator" });
   }
 };
+
+exports.requireRoles = requireRoles;
 

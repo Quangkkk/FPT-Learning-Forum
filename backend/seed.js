@@ -1,6 +1,7 @@
 const User = require("./models/User");
 const Post = require("./models/Post");
 const Comment = require("./models/Comment");
+const Report = require("./models/Report");
 const Category = require("./models/Category");
 const Topic = require("./models/Topic");
 
@@ -9,9 +10,9 @@ const seedData = async () => {
   const userCount = await User.countDocuments();
   if (userCount === 0) {
     await User.insertMany([
-      { name: "Student", email: "student@fpt.edu.vn", password: "123456", role: "student", active: true },
-      { name: "Moderator", email: "mod@fpt.edu.vn", password: "123456", role: "moderator", active: true },
-      { name: "Admin", email: "admin@fpt.edu.vn", password: "123456", role: "admin", active: true }
+      { name: "Student", email: "student@fpt.edu.vn", password: "123456", role: "student", active: true, isVerify: true },
+      { name: "Moderator", email: "mod@fpt.edu.vn", password: "123456", role: "moderator", active: true, isVerify: true },
+      { name: "Admin", email: "admin@fpt.edu.vn", password: "123456", role: "admin", active: true, isVerify: true }
     ]);
     console.log("🌱 Seeded users");
   }
@@ -98,6 +99,65 @@ const seedData = async () => {
     ]);
 
     console.log("🌱 Seeded comments");
+  }
+
+  // Ensure moderator has reviewed data to display if DB only contains pending posts.
+  const reviewedCount = await Post.countDocuments({ status: { $in: ["approved", "rejected"] } });
+  if (reviewedCount === 0 && student) {
+    const fallbackTopicId =
+      topicsMap["prf192"] ||
+      topicsMap["pro192"] ||
+      Object.values(topicsMap)[0];
+
+    if (fallbackTopicId) {
+      await Post.insertMany([
+        {
+          title: "[Demo] PRF192 - Review pass",
+          content: "Demo approved post for moderator list.",
+          topicId: fallbackTopicId,
+          authorId: student._id,
+          status: "approved"
+        },
+        {
+          title: "[Demo] PRF192 - Review reject",
+          content: "Demo rejected post for moderator list.",
+          topicId: fallbackTopicId,
+          authorId: student._id,
+          status: "rejected",
+          moderationReason: "Nội dung demo chưa đạt tiêu chí"
+        }
+      ]);
+
+      console.log("🌱 Seeded reviewed posts fallback");
+    }
+  }
+
+  // ================= REPORTS =================
+  const reportCount = await Report.countDocuments();
+  if (reportCount === 0) {
+    const postsForReport = await Post.find().limit(3).select("_id status title");
+
+    if (postsForReport.length > 0) {
+      const reporterId = student?._id || moderator?._id;
+
+      if (reporterId) {
+        const fakeReports = postsForReport.map((post, idx) => ({
+          targetType: "post",
+          targetId: post._id.toString(),
+          reason:
+            idx === 0
+              ? "Nội dung có dấu hiệu spam"
+              : idx === 1
+              ? "Thông tin chưa chính xác"
+              : "Ngôn từ chưa phù hợp",
+          reporterId,
+          status: idx === 2 ? "resolved" : "pending"
+        }));
+
+        await Report.insertMany(fakeReports);
+        console.log("🌱 Seeded reports");
+      }
+    }
   }
 };
 

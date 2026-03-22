@@ -240,15 +240,25 @@ function RightSidebar() {
 }
 
 export default function Shell() {
+  const loc = useLocation()
+  const isManagementPage =
+    loc.pathname.startsWith('/moderator') || loc.pathname.startsWith('/admin')
+
   return (
     <div className="app-shell min-h-screen">
       <TopBar />
-      <CategoryTabs />
-      <main className="mx-auto grid max-w-7xl flex-1 grid-cols-1 gap-6 px-4 py-5 lg:grid-cols-[minmax(0,1.25fr)_320px]">
+      {!isManagementPage && <CategoryTabs />}
+      <main
+        className={`mx-auto px-4 py-4 ${
+          isManagementPage
+            ? 'max-w-7xl'
+            : 'grid max-w-6xl grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]'
+        }`}
+      >
         <div className="min-w-0">
           <Outlet />
         </div>
-        <RightSidebar />
+        {!isManagementPage && <RightSidebar />}
       </main>
       <footer className="border-t border-[var(--border)] bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">

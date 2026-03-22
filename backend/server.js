@@ -2,12 +2,17 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
+const multer = require("multer");
 const seedUsers = require("./seed");
 const app = express();
 const jwt = require("jsonwebtoken");
 
 app.use(cors());
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json());
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // CONNECT DB
 mongoose.connect(process.env.MONGO_URI)
@@ -23,6 +28,26 @@ const Post = require("./models/Post");
 const Comment = require("./models/Comment");
 const Report = require("./models/Report");
 const { verifyToken, verifyAdmin, verifyModerator } = require("./middleware/auth.middleware");
+const adminRoutes = require("./routes/admin.routes");
+const { sendVerificationEmail } = require("./config/mailer");
+
+const postUploadDir = path.join(__dirname, "uploads", "posts");
+const postStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    fs.mkdirSync(postUploadDir, { recursive: true });
+    cb(null, postUploadDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || "").toLowerCase();
+    const baseName = path
+      .basename(file.originalname || "file", ext)
+      .replace(/[^a-zA-Z0-9-_]/g, "-")
+      .slice(0, 50);
+
+    cb(null, `${Date.now()}-${baseName || "upload"}${ext}`);
+  }
+});
+const postUpload = multer({ storage: postStorage });
 
 
 // ================= AUTH =================
@@ -58,17 +83,142 @@ app.get("/api/users", async (req, res) => {
   const users = await User.find().select("-password");
   res.json(users);
 });
+
+app.post("/api/auth/register", async (req, res) => {
+  const { name, email, password } = req.body;
+
+  try {
+    const normalizedName = String(name || "").trim();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const rawPassword = String(password || "");
+
+    if (!normalizedName || !normalizedEmail || !rawPassword) {
+      return res.status(400).json({ message: "Name, email, password là bắt buộc" });
+    }
+
+    if (rawPassword.length < 6) {
+      return res.status(400).json({ message: "Mật khẩu tối thiểu 6 ký tự" });
+    }
+
+    const existing = await User.findOne({ email: normalizedEmail });
+    if (existing && existing.isVerify) {
+      return res.status(409).json({ message: "Email đã được đăng ký" });
+    }
+
+    const verifyToken = crypto.randomBytes(32).toString("hex");
+    const verifyTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    let user;
+    if (existing) {
+      existing.name = normalizedName;
+      existing.password = rawPassword;
+      existing.role = "student";
+      existing.active = true;
+      existing.isVerify = false;
+      existing.verifyToken = verifyToken;
+      existing.verifyTokenExpires = verifyTokenExpires;
+      user = await existing.save();
+    } else {
+      user = await User.create({
+        name: normalizedName,
+        email: normalizedEmail,
+        password: rawPassword,
+        role: "student",
+        active: true,
+        isVerify: false,
+        verifyToken,
+        verifyTokenExpires
+      });
+    }
+
+    const clientBaseUrl = process.env.CLIENT_URL || "http://localhost:5173";
+    const verifyUrl = `${clientBaseUrl}/verify-email?token=${encodeURIComponent(verifyToken)}`;
+
+    await sendVerificationEmail({
+      to: user.email,
+      name: user.name,
+      verifyUrl
+    });
+
+    return res.status(201).json({
+      message: "Đăng ký thành công. Vui lòng kiểm tra email để xác minh tài khoản."
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Register error", error: err.message });
+  }
+});
+
+app.get("/api/auth/verify-email", async (req, res) => {
+  const token = String(req.query.token || "").trim();
+
+  if (!token) {
+    return res.status(400).json({ message: "Thiếu token xác minh" });
+  }
+
+  try {
+    const user = await User.findOne({ verifyToken: token });
+
+    if (!user) {
+      return res.status(400).json({ message: "Link xác minh không hợp lệ hoặc đã hết hạn" });
+    }
+
+    if (user.isVerify) {
+      return res.json({ message: "Email đã được xác minh thành công " });
+    }
+
+    const isExpired = !user.verifyTokenExpires || user.verifyTokenExpires <= new Date();
+
+    if (isExpired) {
+      const refreshedToken = crypto.randomBytes(32).toString("hex");
+      const refreshedTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      user.verifyToken = refreshedToken;
+      user.verifyTokenExpires = refreshedTokenExpires;
+      await user.save();
+
+      const clientBaseUrl = process.env.CLIENT_URL || "http://localhost:5173";
+      const verifyUrl = `${clientBaseUrl}/verify-email?token=${encodeURIComponent(refreshedToken)}`;
+
+      await sendVerificationEmail({
+        to: user.email,
+        name: user.name,
+        verifyUrl
+      });
+
+      return res.status(400).json({
+        message: "Link xác minh đã hết hạn. Hệ thống đã gửi link mới vào email của bạn."
+      });
+    }
+
+    // Keep token for idempotent behavior: repeated clicks should show
+    // "already verified" instead of "invalid link".
+    user.isVerify = true;
+    await user.save();
+
+    return res.json({ message: "Xác minh email thành công" });
+  } catch (err) {
+    return res.status(500).json({ message: "Verify error", error: err.message });
+  }
+});
+
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const user = await User.findOne({ email });
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const rawPassword = String(password || "");
+
+    if (!normalizedEmail || !rawPassword) {
+      return res.status(400).json({ message: "Email và mật khẩu là bắt buộc" });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
       return res.status(400).json({ message: "User not found" });
     }
 
-    if (user.password !== password) {
+    if (user.password !== rawPassword) {
       return res.status(400).json({ message: "Wrong password" });
     }
 
@@ -78,18 +228,32 @@ app.post("/api/auth/login", async (req, res) => {
       });
     }
 
+    if (user.isVerify === false) {
+      return res.status(403).json({ message: "Email chưa xác minh. Vui lòng kiểm tra email." });
+    }
+
     const token = jwt.sign(
       {
         id: user._id,
-        role: user.role
+        role: user.role,
+        email: user.email
       },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
+    const safeUser = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      active: user.active,
+      isVerify: user.isVerify
+    };
+
     res.json({
       token,
-      user
+      user: safeUser
     });
 
   } catch (err) {
@@ -97,37 +261,50 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+app.get("/api/auth/me", verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User không tồn tại" });
+    }
+
+    return res.json({ user });
+  } catch (err) {
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 // ================= POSTS =================
 
-function normalizeMedia(items = []) {
-  if (!Array.isArray(items)) return [];
-
-  return items
-    .filter((item) => item && typeof item.url === "string")
-    .map((item) => {
-      const mimeType = String(item.mimeType || "");
-      const kind = mimeType.startsWith("video/") ? "video" : "image";
-
-      return {
-        kind,
-        name: item.name || "attachment",
-        mimeType,
-        url: item.url
-      };
-    });
-}
-
-app.post("/api/posts", async (req, res) => {
+app.post("/api/posts", verifyToken, postUpload.fields([
+  { name: "image", maxCount: 10 },
+  { name: "video", maxCount: 10 }
+]), async (req, res) => {
   try {
-    const { title, content, topicId, authorId, isAnonymous, media } = req.body
+    const { title, content, topicId } = req.body
+
+    const normalizedTitle = String(title || "").trim()
+    const normalizedContent = String(content || "").trim()
+    const normalizedTopicId = String(topicId || "").trim()
+
+    if (!normalizedTitle || !normalizedContent || !normalizedTopicId) {
+      return res.status(400).json({ message: "Thiếu tiêu đề, nội dung hoặc chủ đề" })
+    }
+
+    const normalizedAnonymous = String(req.body.isAnonymous || "false").toLowerCase() === "true"
+
+    const imageUrls = (req.files?.image || []).map((file) => `/uploads/posts/${file.filename}`)
+    const videoUrls = (req.files?.video || []).map((file) => `/uploads/posts/${file.filename}`)
 
     const post = await Post.create({
-      title,
-      content,
-      topicId,
-      authorId,
-      isAnonymous,
-      media: normalizeMedia(media)
+      title: normalizedTitle,
+      content: normalizedContent,
+      topicId: normalizedTopicId,
+      authorId: req.user.id,
+      isAnonymous: normalizedAnonymous,
+      imageUrls,
+      videoUrls
     })
 
     res.json(post)
@@ -156,11 +333,25 @@ app.get("/api/posts/:id", async (req, res) => {
   res.json({ post, comments });
 });
 
-app.patch("/api/posts/:id/status", async (req, res) => {
-  const { status } = req.body;
+app.patch("/api/posts/:id/status", verifyToken, verifyModerator, async (req, res) => {
+  const { status, reason } = req.body;
 
   try {
-    await Post.findByIdAndUpdate(req.params.id, { status });
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Trạng thái không hợp lệ' })
+    }
+
+    const normalizedReason = String(reason || '').trim()
+
+    if (status === 'rejected' && !normalizedReason) {
+      return res.status(400).json({ message: 'Cần nhập lý do khi hủy bài' })
+    }
+
+    await Post.findByIdAndUpdate(req.params.id, {
+      status,
+      moderationReason: status === 'rejected' ? normalizedReason : ''
+    });
+
     res.json({ message: "Post status updated" });
   } catch (err) {
     res.status(500).json({ message: "Error updating post" });
@@ -169,10 +360,10 @@ app.patch("/api/posts/:id/status", async (req, res) => {
 
 
 // ================= COMMENTS =================
-app.post("/api/posts/:id/comments", async (req, res) => {
+app.post("/api/posts/:id/comments", verifyToken, async (req, res) => {
   const comment = await Comment.create({
     postId: req.params.id,
-    authorId: req.body.authorId,
+    authorId: req.user.id,
     content: req.body.content
   });
 
@@ -181,18 +372,51 @@ app.post("/api/posts/:id/comments", async (req, res) => {
 
 
 // ================= REPORTS =================
-app.get("/api/reports", async (req, res) => {
+app.get("/api/reports", verifyToken, verifyModerator, async (req, res) => {
   const reports = await Report.find().sort({ createdAt: -1 });
   res.json(reports);
 });
 
-app.post("/api/reports", async (req, res) => {
-  const report = await Report.create(req.body);
+app.post("/api/reports", verifyToken, async (req, res) => {
+  const report = await Report.create({
+    ...req.body,
+    reporterId: req.user.id
+  });
   res.json(report);
 });
 
+app.patch("/api/reports/:id/status", verifyToken, verifyModerator, async (req, res) => {
+  try {
+    const { status, reason } = req.body;
+    const normalizedReason = String(reason || "").trim();
 
-app.get("/api/admin/stats", async (req, res) => {
+    if (!["resolved", "cancelled"].includes(status)) {
+      return res.status(400).json({ message: "Trạng thái report không hợp lệ" });
+    }
+
+    if (!normalizedReason) {
+      return res.status(400).json({ message: "Cần nhập lý do xử lý report" });
+    }
+
+    const report = await Report.findById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ message: "Report không tồn tại" });
+    }
+
+    report.status = status;
+    report.processReason = normalizedReason;
+    await report.save();
+
+    return res.json({ message: "Report updated", report });
+  } catch (err) {
+    return res.status(500).json({ message: "Error updating report" });
+  }
+});
+
+
+app.use("/api/admin", adminRoutes);
+
+app.get("/api/admin/stats", verifyToken, verifyAdmin, async (req, res) => {
   try {
     const userCount = await User.countDocuments()
     const postCount = await Post.countDocuments()
