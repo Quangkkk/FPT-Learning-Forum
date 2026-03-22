@@ -1,30 +1,57 @@
 import React from 'react'
-import { RequireRole } from '../lib/auth'
-import { Card, CardBody, CardHeader } from '../components/Card'
-import Badge from '../components/Badge'
-
-
-function pct(v) {
-  const n = Number(v) || 0
-  return Math.max(0, Math.min(100, Math.round(n)))
-}
+import { useNavigate } from 'react-router-dom'
 
 function AdminInner() {
-  const [stats, setStats] = React.useState(null)
+  const navigate = useNavigate()
 
-  React.useEffect(() => {
-    fetch("/api/admin/stats")
-      .then(res => res.json())
-      .then(data => setStats(data))
-      .catch(err => console.error(err))
+  const [stats, setStats] = React.useState(null)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState(null)
+
+  const auth = React.useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("lf_auth_v1")) || null
+    } catch {
+      return null
+    }
   }, [])
 
-  if (!stats) {
-    return <div className="p-6">Đang tải thống kê…</div>
+  if (!auth?.token) {
+    return <div className="p-6 text-red-600">Bạn chưa đăng nhập</div>
+  }
+  if (auth.user.role !== 'admin') {
+    return <div className="p-6 text-red-600">Bạn không có quyền truy cập</div>
   }
 
+  React.useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch("/api/admin/stats", {
+          headers: { Authorization: `Bearer ${auth.token}` }
+        })
+
+        if (!res.ok) throw new Error("Lấy thống kê thất bại")
+
+        const data = await res.json()
+        setStats(data)
+      } catch (err) {
+        console.error(err)
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [auth.token])
+
+  if (loading) return <div className="p-6">Đang tải dữ liệu…</div>
+  if (error) return <div className="p-6 text-red-600">Lỗi: {error}</div>
+  if (!stats) return <div className="p-6">Không có dữ liệu thống kê</div>
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div className="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-700 p-6 text-white shadow-soft">
         <div className="text-2xl font-bold">Admin Dashboard</div>
@@ -33,53 +60,47 @@ function AdminInner() {
         </div>
       </div>
 
-      {/* Stats cards */}
+      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <div className="rounded-2xl bg-white p-5 shadow-soft">
           <div className="text-sm text-slate-500">Tổng người dùng</div>
-          <div className="mt-2 text-3xl font-extrabold text-slate-900">
-            {stats.users}
-          </div>
+          <div className="mt-2 text-3xl font-extrabold">{stats.users}</div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow-soft">
           <div className="text-sm text-slate-500">Tổng bài viết</div>
-          <div className="mt-2 text-3xl font-extrabold text-slate-900">
-            {stats.posts}
-          </div>
+          <div className="mt-2 text-3xl font-extrabold">{stats.posts}</div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow-soft">
           <div className="text-sm text-slate-500">Bài chờ duyệt</div>
-          <div className="mt-2 text-3xl font-extrabold text-amber-600">
-            {stats.pending}
-          </div>
+          <div className="mt-2 text-3xl font-extrabold text-amber-600">{stats.pending}</div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow-soft">
           <div className="text-sm text-slate-500">Report</div>
-          <div className="mt-2 text-3xl font-extrabold text-rose-600">
-            {stats.reports}
-          </div>
+          <div className="mt-2 text-3xl font-extrabold text-rose-600">{stats.reports}</div>
         </div>
       </div>
 
-      {/* Quick actions */}
+      {/* Quick Actions */}
       <div className="rounded-2xl bg-white p-6 shadow-soft">
-        <div className="text-lg font-semibold mb-3">Thao tác nhanh</div>
-        <div className="flex gap-3">
+        <div className="text-lg font-semibold mb-4">Quản lý hệ thống</div>
+
+        <div className="flex gap-4">
           <button
-            onClick={() => window.location.href = "/moderator"}
-            className="rounded-xl bg-sky-600 px-4 py-2 text-white font-semibold hover:bg-sky-700"
+            onClick={() => navigate("/admin/topics")}
+            className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700"
           >
-            Duyệt bài
+            Quản lý Topics
           </button>
 
+          {/* Sau này thêm */}
           <button
-            onClick={() => window.location.href = "/reports"}
-            className="rounded-xl bg-rose-600 px-4 py-2 text-white font-semibold hover:bg-rose-700"
+            onClick={() => navigate("/admin/categories")}
+            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700"
           >
-            Xem Report
+            Quản lý Categories
           </button>
         </div>
       </div>
@@ -87,10 +108,4 @@ function AdminInner() {
   )
 }
 
-export default function Admin() {
-  return (
-    <RequireRole allow={['admin']}>
-      <AdminInner />
-    </RequireRole>
-  )
-}
+export default AdminInner
