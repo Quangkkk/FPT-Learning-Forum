@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react'
 import { RequireRole } from '../lib/auth'
 import { Card, CardBody, CardHeader } from '../components/Card'
 import Badge from '../components/Badge'
+import { useAuth } from '../lib/auth'
 
 function ModeratorInner() {
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState([])
   const [reports, setReports] = useState([])
+  const { user } = useAuth()
 
   async function refresh() {
     setLoading(true)
@@ -28,19 +30,41 @@ function ModeratorInner() {
   useEffect(() => {
     refresh()
   }, [])
-
   async function setStatus(postId, status) {
     try {
-      await fetch(`/api/posts/${postId}/status`, {
+      const authData = JSON.parse(localStorage.getItem("lf_auth_v1"));
+      const token = authData.token;
+
+      if (!token) {
+        alert("Bạn chưa đăng nhập!");
+        return;
+      }
+
+      const res = await fetch(`/api/posts/${postId}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ status })
-      })
-      await refresh()
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.message || "Có lỗi xảy ra khi thay đổi trạng thái bài viết");
+        return;
+      }
+
+      refresh();
     } catch (err) {
-      console.error(err)
+      console.error(err);
+      alert("Có lỗi xảy ra, xem console để biết chi tiết.");
     }
   }
+
+
+
 
   return (
     <div className="space-y-4">

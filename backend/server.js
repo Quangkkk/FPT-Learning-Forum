@@ -4,6 +4,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const seedUsers = require("./seed");
 const app = express();
+const jwt = require("jsonwebtoken");
 
 app.use(cors());
 app.use(express.json());
@@ -21,6 +22,7 @@ const User = require("./models/User");
 const Post = require("./models/Post");
 const Comment = require("./models/Comment");
 const Report = require("./models/Report");
+const { verifyToken, verifyAdmin, verifyModerator } = require("./middleware/auth.middleware");
 
 
 // ================= AUTH =================
@@ -59,18 +61,41 @@ app.get("/api/users", async (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
-  const user = await User.findOne({ email });
-  if (!user) return res.status(400).json({ message: "User not found" });
+  try {
+    const user = await User.findOne({ email });
 
-  if (user.password !== password)
-    return res.status(400).json({ message: "Wrong password" });
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
 
-  res.json({
-    token: "demo-token",
-    user
-  });
+    if (user.password !== password) {
+      return res.status(400).json({ message: "Wrong password" });
+    }
+
+    if (!user.active) {
+      return res.status(403).json({
+        message: "Tài khoản đã bị khóa"
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        id: user._id,
+        role: user.role
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.json({
+      token,
+      user
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
-
 
 // ================= POSTS =================
 
@@ -109,14 +134,23 @@ app.get("/api/posts/:id", async (req, res) => {
 
   const comments = await Comment.find({ postId: req.params.id })
 
-  res.json({ post, comments })
-})
+  res.json({ post, comments });
+});
 
+app.post("/api/posts", async (req, res) => {
+  const post = await Post.create(req.body);
+  res.json(post);
+});
 
 app.patch("/api/posts/:id/status", async (req, res) => {
   const { status } = req.body;
-  await Post.findByIdAndUpdate(req.params.id, { status });
-  res.json({ message: "Updated" });
+
+  try {
+    await Post.findByIdAndUpdate(req.params.id, { status });
+    res.json({ message: "Post status updated" });
+  } catch (err) {
+    res.status(500).json({ message: "Error updating post" });
+  }
 });
 
 
@@ -159,40 +193,6 @@ app.get("/api/admin/stats", async (req, res) => {
     })
   } catch (err) {
     res.status(500).json({ message: "Server error" })
-  }
-})
-// ================= SEARCH POSTS =================
-app.get("/api/search/posts", async (req, res) => {
-  try {
-    const { q } = req.query;
-
-    if (!q) return res.json([]);
-
-    const posts = await Post.find({
-      title: { $regex: q, $options: "i" } // tìm gần đúng, không phân biệt hoa thường
-    }).sort({ createdAt: -1 });
-
-    res.json(posts);
-  } catch (err) {
-    res.status(500).json({ message: "Search error" });
-  }
-});
-
-// ================= SEARCH USERS =================
-// ================= SEARCH USERS =================
-app.get("/api/search/users", async (req, res) => {
-  try {
-    const { q } = req.query
-
-    if (!q) return res.json([])
-
-    const users = await User.find({
-      name: { $regex: q, $options: "i" }
-    }).select("-password")
-
-    res.json(users)
-  } catch (err) {
-    res.status(500).json({ message: "Search error" })
   }
 })
 

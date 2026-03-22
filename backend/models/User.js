@@ -8,6 +8,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ["student", "moderator", "admin"],
     default: "student"
+  },
+  active: {
+    type: Boolean,
+    default: true
   }
 });
 
