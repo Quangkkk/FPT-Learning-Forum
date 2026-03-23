@@ -41,7 +41,11 @@ function ModeratorInner() {
     setLoading(true)
     try {
       const [postsRes, reportsRes, topicsRes, categoriesRes] = await Promise.all([
-        fetch('/api/posts'),
+        fetch('/api/posts', {
+          headers: {
+            Authorization: `Bearer ${auth?.token || ''}`
+          }
+        }),
         fetch('/api/reports', {
           headers: {
             Authorization: `Bearer ${auth?.token || ''}`
@@ -387,7 +391,7 @@ function ModeratorInner() {
       </aside>
 
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-br from-emerald-50 to-white p-6 shadow-soft">
+        {/* <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-br from-emerald-50 to-white p-6 shadow-soft">
           <div>
             <div className="text-xl font-bold">Moderator Workspace</div>
             <div className="mt-1 text-sm text-slate-600">
@@ -402,7 +406,7 @@ function ModeratorInner() {
             <RefreshCw className="h-4 w-4" />
             Làm mới
           </button>
-        </div>
+        </div> */}
 
         {loading ? (
           <div className="rounded-2xl bg-white p-6 shadow-soft">Đang tải…</div>

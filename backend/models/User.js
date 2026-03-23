@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema({
   verifyTokenExpires: {
     type: Date,
     default: null
+  },
+  following: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    default: []
   }
 });
 

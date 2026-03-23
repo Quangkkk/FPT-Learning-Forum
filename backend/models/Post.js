@@ -23,7 +23,7 @@ const postSchema = new mongoose.Schema({
     ref: "User"
   },
 
-  isAnonymous: {        // 👈 thêm dòng này
+  isAnonymous: {
     type: Boolean,
     default: false
   },
@@ -46,12 +46,13 @@ const postSchema = new mongoose.Schema({
 
   videoUrls: {
     type: [String],
-    media: {
-      type: [mediaSchema],
-      default: []
-    }
+  }, // ✅ FIX
 
+  media: {
+    type: [mediaSchema],
+    default: []
   }
+
 }, { timestamps: true });
 
 module.exports = mongoose.model("Post", postSchema);

@@ -1,4 +1,5 @@
 require("dotenv").config();
+const http = require("http");
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
@@ -27,6 +28,98 @@ const User = require("./models/User");
 const Post = require("./models/Post");
 const Comment = require("./models/Comment");
 const Report = require("./models/Report");
+const DirectMessage = require("./models/DirectMessage");
+const Category = require("./models/Category");
+const Topic = require("./models/Topic");
+
+/** Chỉ hiển thị danh mục này trên diễn đàn công khai (ẩn Marketing và category khác). */
+const PUBLIC_FORUM_CATEGORY_SLUG = "cong-nghe-thong-tin";
+
+const STATIC_FORUM_FALLBACK = {
+  categories: [
+    {
+      id: "cong-nghe-thong-tin",
+      name: "Công nghệ thông tin",
+      topics: [
+        "prf192",
+        "pro192",
+        "csd201",
+        "dbi202",
+        "swp391",
+        "mad101",
+        "wed201"
+      ]
+    }
+  ],
+  topics: {
+    prf192: { name: "PRF192 - Programming Fundamentals" },
+    pro192: { name: "PRO192 - Object-Oriented Programming" },
+    csd201: { name: "CSD201 - Data Structures & Algorithms" },
+    dbi202: { name: "DBI202 - Database Systems" },
+    swp391: { name: "SWP391 - Software Project" },
+    mad101: { name: "MAD101 - Mobile Development" },
+    wed201: { name: "WED201 - Web Design" }
+  }
+};
+
+async function buildForumPayload() {
+  try {
+    const cat = await Category.findOne({ slug: PUBLIC_FORUM_CATEGORY_SLUG }).lean();
+    if (!cat) return STATIC_FORUM_FALLBACK;
+
+    const topicsDocs = await Topic.find({ categoryId: cat._id }).sort({ name: 1 }).lean();
+    if (!topicsDocs.length) return STATIC_FORUM_FALLBACK;
+
+    const topics = {};
+    const topicSlugs = [];
+    for (const t of topicsDocs) {
+      topics[t.slug] = { name: t.name };
+      topicSlugs.push(t.slug);
+    }
+
+    return {
+      categories: [
+        {
+          id: cat.slug,
+          name: cat.name,
+          topics: topicSlugs
+        }
+      ],
+      topics
+    };
+  } catch {
+    return STATIC_FORUM_FALLBACK;
+  }
+}
+
+async function getPublicForumTopicIdValues() {
+  try {
+    const cat = await Category.findOne({ slug: PUBLIC_FORUM_CATEGORY_SLUG }).lean();
+    if (!cat) return null;
+
+    const topicsDocs = await Topic.find({ categoryId: cat._id }).select("slug _id").lean();
+    if (!topicsDocs.length) return null;
+
+    const values = [];
+    for (const t of topicsDocs) {
+      values.push(t.slug, String(t._id));
+    }
+    return values;
+  } catch {
+    return null;
+  }
+}
+
+function canBypassForumTopicFilter(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ") || !process.env.JWT_SECRET) return false;
+  try {
+    const decoded = jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET);
+    return decoded.role === "moderator" || decoded.role === "admin";
+  } catch {
+    return false;
+  }
+}
 const { verifyToken, verifyAdmin, verifyModerator } = require("./middleware/auth.middleware");
 const adminRoutes = require("./routes/admin.routes");
 const { sendVerificationEmail } = require("./config/mailer");
@@ -51,37 +144,300 @@ const postUpload = multer({ storage: postStorage });
 
 
 // ================= AUTH =================
-app.get("/api/forum", (req, res) => {
-  res.json({
-    categories: [
-      {
-        id: "cong-nghe-thong-tin",
-        name: "Công nghệ thông tin",
-        topics: [
-          "prf192",
-          "pro192",
-          "csd201",
-          "dbi202",
-          "swp391",
-          "mad101",
-          "wed201"
-        ]
-      }
-    ],
-    topics: {
-      prf192: { name: "PRF192 - Programming Fundamentals" },
-      pro192: { name: "PRO192 - Object-Oriented Programming" },
-      csd201: { name: "CSD201 - Data Structures & Algorithms" },
-      dbi202: { name: "DBI202 - Database Systems" },
-      swp391: { name: "SWP391 - Software Project" },
-      mad101: { name: "MAD101 - Mobile Development" },
-      wed201: { name: "WED201 - Web Design" }
-    }
-  });
+app.get("/api/forum", async (req, res) => {
+  try {
+    const payload = await buildForumPayload();
+    res.json(payload);
+  } catch (err) {
+    res.status(500).json({ message: "Forum error", error: err.message });
+  }
 });
+function normalizeFollowTargetId(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s || !mongoose.Types.ObjectId.isValid(s)) return null;
+  return s;
+}
+
+async function followUserHandler(req, res) {
+  try {
+    const targetId =
+      normalizeFollowTargetId(req.params?.id) ||
+      normalizeFollowTargetId(req.body?.userId) ||
+      normalizeFollowTargetId(req.body?.targetUserId);
+
+    if (!targetId) {
+      return res.status(400).json({ message: "Thiếu hoặc sai ID người dùng" });
+    }
+    if (String(req.user.id) === String(targetId)) {
+      return res.status(400).json({ message: "Không thể theo dõi chính mình" });
+    }
+
+    const target = await User.findById(targetId).select("_id active").lean();
+    if (!target) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+    if (target.active === false) {
+      return res.status(403).json({ message: "Không thể theo dõi tài khoản đã khóa" });
+    }
+
+    await User.updateOne({ _id: req.user.id }, { $addToSet: { following: targetId } });
+
+    const followerCount = await User.countDocuments({ following: targetId });
+
+    return res.json({
+      message: "Đã theo dõi",
+      isFollowing: true,
+      followerCount
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi theo dõi", error: err.message });
+  }
+}
+
+async function unfollowUserHandler(req, res) {
+  try {
+    const targetId =
+      normalizeFollowTargetId(req.params?.id) ||
+      normalizeFollowTargetId(req.body?.userId) ||
+      normalizeFollowTargetId(req.body?.targetUserId);
+
+    if (!targetId) {
+      return res.status(400).json({ message: "Thiếu hoặc sai ID người dùng" });
+    }
+
+    await User.updateOne({ _id: req.user.id }, { $pull: { following: targetId } });
+
+    const followerCount = await User.countDocuments({ following: targetId });
+
+    return res.json({
+      message: "Đã bỏ theo dõi",
+      isFollowing: false,
+      followerCount
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi bỏ theo dõi", error: err.message });
+  }
+}
+
+function decodeOptionalJwtUser(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+  try {
+    return jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
+function packDmRest(doc) {
+  const from = doc.from;
+  const to = doc.to;
+  return {
+    _id: doc._id,
+    text: doc.text,
+    createdAt: doc.createdAt,
+    fromId: from?._id != null ? String(from._id) : String(doc.from),
+    toId: to?._id != null ? String(to._id) : String(doc.to),
+    fromName: from?.name || "",
+    toName: to?.name || ""
+  };
+}
+
 app.get("/api/users", async (req, res) => {
-  const users = await User.find().select("-password");
-  res.json(users);
+  try {
+    const users = await User.find()
+      .select("-password")
+      .lean();
+
+    const followerAgg = await User.aggregate([
+      { $project: { following: { $ifNull: ["$following", []] } } },
+      { $unwind: "$following" },
+      { $group: { _id: "$following", followerCount: { $sum: 1 } } }
+    ]);
+    const followerMap = Object.fromEntries(
+      followerAgg.map((x) => [String(x._id), x.followerCount])
+    );
+
+    let viewerFollowing = new Set();
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("Bearer ") && process.env.JWT_SECRET) {
+      try {
+        const bearer = authHeader.split(" ")[1];
+        const decoded = jwt.verify(bearer, process.env.JWT_SECRET);
+        const me = await User.findById(decoded.id).select("following").lean();
+        if (me?.following?.length) {
+          viewerFollowing = new Set(me.following.map((id) => String(id)));
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const payload = users.map((u) => {
+      const id = String(u._id);
+      const followingList = u.following || [];
+      return {
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        active: u.active,
+        isVerify: u.isVerify,
+        followerCount: followerMap[id] || 0,
+        followingCount: followingList.length,
+        isFollowing: viewerFollowing.has(id)
+      };
+    });
+
+    res.json(payload);
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi tải danh sách người dùng", error: err.message });
+  }
+});
+
+app.post("/api/follow", verifyToken, followUserHandler);
+app.post("/api/unfollow", verifyToken, unfollowUserHandler);
+app.post("/api/users/:id/follow", verifyToken, followUserHandler);
+app.post("/api/users/:id/unfollow", verifyToken, unfollowUserHandler);
+
+app.get("/api/users/:id/profile", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID không hợp lệ" });
+    }
+
+    const u = await User.findById(id).select("name email role active following isVerify").lean();
+    if (!u) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    const viewer = decodeOptionalJwtUser(req);
+    const viewerId = viewer ? String(viewer.id) : null;
+
+    const followerCount = await User.countDocuments({ following: id });
+    const followingCount = (u.following || []).length;
+    const postCount = await Post.countDocuments({ authorId: id });
+
+    let isFollowing = false;
+    if (viewerId && viewerId !== id) {
+      const me = await User.findById(viewerId).select("following").lean();
+      isFollowing = (me?.following || []).some((x) => String(x) === id);
+    }
+
+    const isSelf = viewerId === id;
+    const showEmail = isSelf || viewer?.role === "admin";
+
+    return res.json({
+      _id: u._id,
+      name: u.name,
+      role: u.role,
+      active: u.active !== false,
+      isVerify: u.isVerify,
+      email: showEmail ? u.email : undefined,
+      followerCount,
+      followingCount,
+      postCount,
+      isFollowing: Boolean(viewerId && viewerId !== id && isFollowing)
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi tải profile", error: err.message });
+  }
+});
+
+app.get("/api/users/:id/posts", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID không hợp lệ" });
+    }
+
+    const exists = await User.exists({ _id: id });
+    if (!exists) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    const limit = Math.min(30, Math.max(1, parseInt(String(req.query.limit || "12"), 10) || 12));
+
+    const posts = await Post.find({ authorId: id })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .select("title topicId createdAt status")
+      .lean();
+
+    return res.json(posts);
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi tải bài viết", error: err.message });
+  }
+});
+
+app.get("/api/messages/conversations", verifyToken, async (req, res) => {
+  try {
+    const me = new mongoose.Types.ObjectId(req.user.id);
+    const rows = await DirectMessage.aggregate([
+      { $match: { $or: [{ from: me }, { to: me }] } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: {
+            $cond: [{ $eq: ["$from", me] }, "$to", "$from"]
+          },
+          lastText: { $first: "$text" },
+          lastAt: { $first: "$createdAt" }
+        }
+      },
+      { $sort: { lastAt: -1 } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "peer"
+        }
+      },
+      { $unwind: { path: "$peer", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          peerId: "$_id",
+          peerName: "$peer.name",
+          lastText: 1,
+          lastAt: 1
+        }
+      }
+    ]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi tải hội thoại", error: err.message });
+  }
+});
+
+app.get("/api/messages/with/:otherUserId", verifyToken, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const other = req.params.otherUserId;
+    if (!mongoose.Types.ObjectId.isValid(other)) {
+      return res.status(400).json({ message: "ID không hợp lệ" });
+    }
+    if (String(me) === String(other)) {
+      return res.status(400).json({ message: "Không thể xem hội thoại với chính mình" });
+    }
+
+    const list = await DirectMessage.find({
+      $or: [
+        { from: me, to: other },
+        { from: other, to: me }
+      ]
+    })
+      .sort({ createdAt: 1 })
+      .limit(300)
+      .populate("from", "name")
+      .populate("to", "name")
+      .lean();
+
+    res.json(list.map(packDmRest));
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi tải tin nhắn", error: err.message });
+  }
 });
 
 app.post("/api/auth/register", async (req, res) => {
@@ -205,6 +561,10 @@ app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ message: "Cấu hình máy chủ thiếu JWT_SECRET" });
+    }
+
     const normalizedEmail = String(email || "").trim().toLowerCase();
     const rawPassword = String(password || "");
 
@@ -215,22 +575,22 @@ app.post("/api/auth/login", async (req, res) => {
     const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
-      return res.status(400).json({ message: "User not found" });
+      return res.status(400).json({ message: "Không tìm thấy tài khoản với email này" });
     }
 
     if (user.password !== rawPassword) {
-      return res.status(400).json({ message: "Wrong password" });
+      return res.status(400).json({ message: "Mật khẩu không đúng" });
     }
 
-    if (!user.active) {
+    if (user.active === false) {
       return res.status(403).json({
         message: "Tài khoản đã bị khóa"
       });
     }
 
-    if (user.isVerify === false) {
-      return res.status(403).json({ message: "Email chưa xác minh. Vui lòng kiểm tra email." });
-    }
+    // if (user.isVerify === false) {
+    //   return res.status(403).json({ message: "Email chưa xác minh. Vui lòng kiểm tra email." });
+    // }
 
     const token = jwt.sign(
       {
@@ -247,7 +607,7 @@ app.post("/api/auth/login", async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      active: user.active,
+      active: user.active !== false,
       isVerify: user.isVerify
     };
 
@@ -292,6 +652,17 @@ app.post("/api/posts", verifyToken, postUpload.fields([
       return res.status(400).json({ message: "Thiếu tiêu đề, nội dung hoặc chủ đề" })
     }
 
+    const role = req.user?.role;
+    const canPostAnyTopic = role === "moderator" || role === "admin";
+    if (!canPostAnyTopic) {
+      const allowed = await getPublicForumTopicIdValues();
+      if (allowed?.length && !allowed.includes(normalizedTopicId)) {
+        return res.status(400).json({
+          message: "Chỉ được đăng bài trong các chủ đề thuộc Công nghệ thông tin"
+        });
+      }
+    }
+
     const normalizedAnonymous = String(req.body.isAnonymous || "false").toLowerCase() === "true"
 
     const imageUrls = (req.files?.image || []).map((file) => `/uploads/posts/${file.filename}`)
@@ -313,24 +684,54 @@ app.post("/api/posts", verifyToken, postUpload.fields([
   }
 })
 app.get("/api/posts", async (req, res) => {
-  const { topicId } = req.query
+  try {
+    const { topicId } = req.query;
+    const filter = {};
+    const bypass = canBypassForumTopicFilter(req);
+    const allowed = bypass ? null : await getPublicForumTopicIdValues();
 
-  const filter = topicId ? { topicId } : {}
+    if (topicId) {
+      const tid = String(topicId);
+      if (!bypass && allowed?.length && !allowed.includes(tid)) {
+        return res.json([]);
+      }
+      filter.topicId = tid;
+    } else if (!bypass && allowed?.length) {
+      filter.topicId = { $in: allowed };
+    }
 
-  const posts = await Post.find(filter)
-    .populate("authorId", "name email")
-    .sort({ createdAt: -1 })
+    const posts = await Post.find(filter)
+      .populate("authorId", "name email")
+      .sort({ createdAt: -1 });
 
-  res.json(posts)
-})
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: "Error loading posts" });
+  }
+});
 
 app.get("/api/posts/:id", async (req, res) => {
-  const post = await Post.findById(req.params.id)
-    .populate("authorId", "email name")
+  try {
+    const post = await Post.findById(req.params.id).populate("authorId", "email name");
 
-  const comments = await Comment.find({ postId: req.params.id })
+    if (!post) {
+      return res.status(404).json({ message: "Không tìm thấy bài viết" });
+    }
 
-  res.json({ post, comments });
+    const bypass = canBypassForumTopicFilter(req);
+    if (!bypass) {
+      const allowed = await getPublicForumTopicIdValues();
+      if (allowed?.length && !allowed.includes(String(post.topicId))) {
+        return res.status(404).json({ message: "Không tìm thấy bài viết" });
+      }
+    }
+
+    const comments = await Comment.find({ postId: req.params.id });
+
+    res.json({ post, comments });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 app.patch("/api/posts/:id/status", verifyToken, verifyModerator, async (req, res) => {
@@ -434,6 +835,24 @@ app.get("/api/admin/stats", verifyToken, verifyAdmin, async (req, res) => {
   }
 })
 
-app.listen(5000, () => {
-  console.log("🚀 Server running on port 5000");
+const server = http.createServer(app);
+const { Server } = require("socket.io");
+const io = new Server(server, {
+  cors: {
+    origin: true,
+    credentials: true
+  }
+});
+
+require("./socket/directChat")(io, {
+  DirectMessage,
+  User,
+  jwt,
+  JWT_SECRET: process.env.JWT_SECRET
+});
+
+const PORT = process.env.PORT || 5000;
+
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });

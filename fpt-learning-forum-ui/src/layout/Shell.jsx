@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { LogIn, LogOut, Search, Users, Bell, BookOpen, MessageSquare, Shield, Sparkles } from 'lucide-react'
+import { LogIn, LogOut, Search, Users, Bell, BookOpen, MessageSquare, MessageCircle, UserCircle2, Shield, Sparkles } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { useAuth } from '../lib/auth'
 
 function TopBar() {
-  const { isSignedIn, signOut, role } = useAuth()
+  const { isSignedIn, signOut, role, user } = useAuth()
   const nav = useNavigate()
   const loc = useLocation()
   const [q, setQ] = React.useState('')
@@ -68,6 +68,8 @@ function TopBar() {
           {pill('Diễn đàn', BookOpen, '/')}
           {pill('Bài mới', MessageSquare, '/new')}
           {pill('Thành viên', Users, '/members')}
+          {isSignedIn && user?._id && pill('Hồ sơ', UserCircle2, `/profile/${user._id}`)}
+          {isSignedIn && pill('Tin nhắn', MessageCircle, '/chat')}
           {pill('Thông báo', Bell, '/notifications')}
           {role === 'moderator' && pill('Moderator', Shield, '/moderator')}
           {role === 'admin' && pill('Admin', Shield, '/admin')}
@@ -163,7 +165,7 @@ function RightSidebar() {
   const [users, setUsers] = React.useState([])
 
   React.useEffect(() => {
-    fetch('http://localhost:5000/api/forum')
+    fetch('/api/forum')
       .then((res) => res.json())
       .then((data) => setForum(data))
   }, [])
@@ -174,7 +176,7 @@ function RightSidebar() {
       return
     }
 
-    fetch(`http://localhost:5000/api/search/users?q=${keyword}`)
+    fetch(`/api/search/users?q=${encodeURIComponent(keyword)}`)
       .then((res) => res.json())
       .then((data) => setUsers(data))
   }, [keyword])
@@ -197,12 +199,14 @@ function RightSidebar() {
 
           <div className="mt-2 space-y-1">
             {users.map((u) => (
-              <div
+              <button
+                type="button"
                 key={u._id}
-                className="rounded-2xl px-3 py-2 text-sm transition hover:bg-[var(--blue-soft)]"
+                onClick={() => nav(`/profile/${u._id}`)}
+                className="block w-full rounded-2xl px-3 py-2 text-left text-sm transition hover:bg-[var(--blue-soft)]"
               >
                 {u.name || u.email}
-              </div>
+              </button>
             ))}
           </div>
         </div>

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, RequireRole } from './lib/auth'
+import { ChatProvider } from './lib/chat'
 import Shell from './layout/Shell'
 
 import Home from './pages/Home'
@@ -14,6 +15,8 @@ import Register from './pages/Register'
 import VerifyEmail from './pages/VerifyEmail'
 import Search from './pages/Search'
 import Members from './pages/Members'
+import Profile from './pages/Profile'
+import Chat from './pages/Chat'
 import Notifications from './pages/Notifications'
 import Moderator from './pages/Moderator'
 import Admin from './pages/Admin'
@@ -23,6 +26,7 @@ import AdminCategories from './pages/AdminCategories'
 export default function App() {
   return (
     <AuthProvider>
+      <ChatProvider>
       <Routes>
         <Route element={<Shell />}>
           <Route path="/" element={<Home />} />
@@ -40,6 +44,23 @@ export default function App() {
           />
           <Route path="/search" element={<Search />} />
           <Route path="/members" element={<Members />} />
+          <Route path="/profile/:id" element={<Profile />} />
+          <Route
+            path="/chat"
+            element={
+              <RequireRole allow={['student', 'moderator', 'admin']}>
+                <Chat />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/chat/:peerId"
+            element={
+              <RequireRole allow={['student', 'moderator', 'admin']}>
+                <Chat />
+              </RequireRole>
+            }
+          />
           <Route path="/notifications" element={<Notifications />} />
           <Route
             path="/moderator"
@@ -79,6 +100,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
+      </ChatProvider>
     </AuthProvider>
   )
 }
