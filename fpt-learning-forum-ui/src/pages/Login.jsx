@@ -6,7 +6,7 @@ import { useAuth } from '../lib/auth'
 export default function Login() {
   const nav = useNavigate()
   const location = useLocation()
-  const { signIn, isSignedIn, loading: authLoading } = useAuth()
+  const { signIn, isSignedIn, loading: authLoading, user } = useAuth()
 
   const [email, setEmail] = React.useState('student@fpt.edu.vn')
   const [password, setPassword] = React.useState('123456')
@@ -19,10 +19,13 @@ export default function Login() {
       : null
 
   React.useEffect(() => {
-    if (!authLoading && isSignedIn) {
-      nav('/', { replace: true })
-    }
-  }, [isSignedIn, authLoading, nav])
+    if (authLoading || !isSignedIn) return
+    let dest = '/'
+    if (fromPath && fromPath !== '/login') dest = fromPath
+    else if (user?.role === 'admin') dest = '/admin'
+    else if (user?.role === 'moderator') dest = '/moderator'
+    nav(dest, { replace: true })
+  }, [authLoading, isSignedIn, user, fromPath, nav])
 
   async function submit(e) {
     e.preventDefault()
@@ -30,20 +33,9 @@ export default function Login() {
     setSubmitting(true)
 
     try {
-      const auth = await signIn(email.trim(), password)
-
-      if (!auth?.user) {
+      const session = await signIn(email.trim(), password)
+      if (!session?.user) {
         throw new Error('Đăng nhập thất bại')
-      }
-
-      if (fromPath && fromPath !== '/login') {
-        nav(fromPath, { replace: true })
-      } else if (auth.user.role === 'admin') {
-        nav('/admin', { replace: true })
-      } else if (auth.user.role === 'moderator') {
-        nav('/moderator', { replace: true })
-      } else {
-        nav('/', { replace: true })
       }
     } catch (err) {
       setError(err?.message || 'Đăng nhập thất bại')

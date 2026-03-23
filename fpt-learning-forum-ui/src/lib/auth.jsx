@@ -75,17 +75,23 @@ export function AuthProvider({ children }) {
           body: JSON.stringify({ email, password })
         })
 
-        const data = await res.json()
+        const text = await res.text()
+        let data = {}
+        try {
+          data = text ? JSON.parse(text) : {}
+        } catch {
+          throw new Error("Phản hồi máy chủ không hợp lệ")
+        }
 
         if (!res.ok) {
-          throw new Error(data.message || "Login failed")
+          throw new Error(data.message || "Đăng nhập thất bại")
         }
 
         const next = { token: data.token, user: data.user }
         setAuth(next)
         saveAuth(next)
 
-        return next   // 👈 THÊM DÒNG NÀY
+        return next
       },
 
       signOut() {
