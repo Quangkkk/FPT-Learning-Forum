@@ -27,6 +27,97 @@ const User = require("./models/User");
 const Post = require("./models/Post");
 const Comment = require("./models/Comment");
 const Report = require("./models/Report");
+const Category = require("./models/Category");
+const Topic = require("./models/Topic");
+
+/** Chỉ hiển thị danh mục này trên diễn đàn công khai (ẩn Marketing và category khác). */
+const PUBLIC_FORUM_CATEGORY_SLUG = "cong-nghe-thong-tin";
+
+const STATIC_FORUM_FALLBACK = {
+  categories: [
+    {
+      id: "cong-nghe-thong-tin",
+      name: "Công nghệ thông tin",
+      topics: [
+        "prf192",
+        "pro192",
+        "csd201",
+        "dbi202",
+        "swp391",
+        "mad101",
+        "wed201"
+      ]
+    }
+  ],
+  topics: {
+    prf192: { name: "PRF192 - Programming Fundamentals" },
+    pro192: { name: "PRO192 - Object-Oriented Programming" },
+    csd201: { name: "CSD201 - Data Structures & Algorithms" },
+    dbi202: { name: "DBI202 - Database Systems" },
+    swp391: { name: "SWP391 - Software Project" },
+    mad101: { name: "MAD101 - Mobile Development" },
+    wed201: { name: "WED201 - Web Design" }
+  }
+};
+
+async function buildForumPayload() {
+  try {
+    const cat = await Category.findOne({ slug: PUBLIC_FORUM_CATEGORY_SLUG }).lean();
+    if (!cat) return STATIC_FORUM_FALLBACK;
+
+    const topicsDocs = await Topic.find({ categoryId: cat._id }).sort({ name: 1 }).lean();
+    if (!topicsDocs.length) return STATIC_FORUM_FALLBACK;
+
+    const topics = {};
+    const topicSlugs = [];
+    for (const t of topicsDocs) {
+      topics[t.slug] = { name: t.name };
+      topicSlugs.push(t.slug);
+    }
+
+    return {
+      categories: [
+        {
+          id: cat.slug,
+          name: cat.name,
+          topics: topicSlugs
+        }
+      ],
+      topics
+    };
+  } catch {
+    return STATIC_FORUM_FALLBACK;
+  }
+}
+
+async function getPublicForumTopicIdValues() {
+  try {
+    const cat = await Category.findOne({ slug: PUBLIC_FORUM_CATEGORY_SLUG }).lean();
+    if (!cat) return null;
+
+    const topicsDocs = await Topic.find({ categoryId: cat._id }).select("slug _id").lean();
+    if (!topicsDocs.length) return null;
+
+    const values = [];
+    for (const t of topicsDocs) {
+      values.push(t.slug, String(t._id));
+    }
+    return values;
+  } catch {
+    return null;
+  }
+}
+
+function canBypassForumTopicFilter(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ") || !process.env.JWT_SECRET) return false;
+  try {
+    const decoded = jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET);
+    return decoded.role === "moderator" || decoded.role === "admin";
+  } catch {
+    return false;
+  }
+}
 const { verifyToken, verifyAdmin, verifyModerator } = require("./middleware/auth.middleware");
 const adminRoutes = require("./routes/admin.routes");
 const { sendVerificationEmail } = require("./config/mailer");
@@ -51,33 +142,13 @@ const postUpload = multer({ storage: postStorage });
 
 
 // ================= AUTH =================
-app.get("/api/forum", (req, res) => {
-  res.json({
-    categories: [
-      {
-        id: "cong-nghe-thong-tin",
-        name: "Công nghệ thông tin",
-        topics: [
-          "prf192",
-          "pro192",
-          "csd201",
-          "dbi202",
-          "swp391",
-          "mad101",
-          "wed201"
-        ]
-      }
-    ],
-    topics: {
-      prf192: { name: "PRF192 - Programming Fundamentals" },
-      pro192: { name: "PRO192 - Object-Oriented Programming" },
-      csd201: { name: "CSD201 - Data Structures & Algorithms" },
-      dbi202: { name: "DBI202 - Database Systems" },
-      swp391: { name: "SWP391 - Software Project" },
-      mad101: { name: "MAD101 - Mobile Development" },
-      wed201: { name: "WED201 - Web Design" }
-    }
-  });
+app.get("/api/forum", async (req, res) => {
+  try {
+    const payload = await buildForumPayload();
+    res.json(payload);
+  } catch (err) {
+    res.status(500).json({ message: "Forum error", error: err.message });
+  }
 });
 app.get("/api/users", async (req, res) => {
   const users = await User.find().select("-password");
@@ -228,9 +299,9 @@ app.post("/api/auth/login", async (req, res) => {
       });
     }
 
-    if (user.isVerify === false) {
-      return res.status(403).json({ message: "Email chưa xác minh. Vui lòng kiểm tra email." });
-    }
+    // if (user.isVerify === false) {
+    //   return res.status(403).json({ message: "Email chưa xác minh. Vui lòng kiểm tra email." });
+    // }
 
     const token = jwt.sign(
       {
@@ -292,6 +363,17 @@ app.post("/api/posts", verifyToken, postUpload.fields([
       return res.status(400).json({ message: "Thiếu tiêu đề, nội dung hoặc chủ đề" })
     }
 
+    const role = req.user?.role;
+    const canPostAnyTopic = role === "moderator" || role === "admin";
+    if (!canPostAnyTopic) {
+      const allowed = await getPublicForumTopicIdValues();
+      if (allowed?.length && !allowed.includes(normalizedTopicId)) {
+        return res.status(400).json({
+          message: "Chỉ được đăng bài trong các chủ đề thuộc Công nghệ thông tin"
+        });
+      }
+    }
+
     const normalizedAnonymous = String(req.body.isAnonymous || "false").toLowerCase() === "true"
 
     const imageUrls = (req.files?.image || []).map((file) => `/uploads/posts/${file.filename}`)
@@ -313,24 +395,54 @@ app.post("/api/posts", verifyToken, postUpload.fields([
   }
 })
 app.get("/api/posts", async (req, res) => {
-  const { topicId } = req.query
+  try {
+    const { topicId } = req.query;
+    const filter = {};
+    const bypass = canBypassForumTopicFilter(req);
+    const allowed = bypass ? null : await getPublicForumTopicIdValues();
 
-  const filter = topicId ? { topicId } : {}
+    if (topicId) {
+      const tid = String(topicId);
+      if (!bypass && allowed?.length && !allowed.includes(tid)) {
+        return res.json([]);
+      }
+      filter.topicId = tid;
+    } else if (!bypass && allowed?.length) {
+      filter.topicId = { $in: allowed };
+    }
 
-  const posts = await Post.find(filter)
-    .populate("authorId", "name email")
-    .sort({ createdAt: -1 })
+    const posts = await Post.find(filter)
+      .populate("authorId", "name email")
+      .sort({ createdAt: -1 });
 
-  res.json(posts)
-})
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: "Error loading posts" });
+  }
+});
 
 app.get("/api/posts/:id", async (req, res) => {
-  const post = await Post.findById(req.params.id)
-    .populate("authorId", "email name")
+  try {
+    const post = await Post.findById(req.params.id).populate("authorId", "email name");
 
-  const comments = await Comment.find({ postId: req.params.id })
+    if (!post) {
+      return res.status(404).json({ message: "Không tìm thấy bài viết" });
+    }
 
-  res.json({ post, comments });
+    const bypass = canBypassForumTopicFilter(req);
+    if (!bypass) {
+      const allowed = await getPublicForumTopicIdValues();
+      if (allowed?.length && !allowed.includes(String(post.topicId))) {
+        return res.status(404).json({ message: "Không tìm thấy bài viết" });
+      }
+    }
+
+    const comments = await Comment.find({ postId: req.params.id });
+
+    res.json({ post, comments });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 app.patch("/api/posts/:id/status", verifyToken, verifyModerator, async (req, res) => {

@@ -55,6 +55,7 @@ export default function Members() {
     } catch (err) {
       console.error(err)
     }
+
   }
 
   if (loading) return <div className="p-6">Loading...</div>
