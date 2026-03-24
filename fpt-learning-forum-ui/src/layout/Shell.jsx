@@ -253,7 +253,7 @@ export default function Shell() {
       <TopBar />
       {!isManagementPage && <CategoryTabs />}
       <main
-        className={`mx-auto px-4 py-4 ${
+        className={`mx-auto flex-1 px-4 py-4 ${
           isManagementPage
             ? 'max-w-7xl'
             : 'grid max-w-6xl grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]'

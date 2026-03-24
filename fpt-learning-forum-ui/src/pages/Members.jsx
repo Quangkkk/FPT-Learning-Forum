@@ -10,6 +10,8 @@ export default function Members() {
   const [loading, setLoading] = useState(true)
   const { role, auth, user } = useAuth()
   const [followBusyId, setFollowBusyId] = useState(null)
+  const [roleDrafts, setRoleDrafts] = useState({})
+  const [roleBusyId, setRoleBusyId] = useState(null)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -17,10 +19,20 @@ export default function Members() {
       const data = await fetchJson('/api/users', {
         headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}
       })
-      setUsers(Array.isArray(data) ? data : [])
+      const nextUsers = Array.isArray(data) ? data : []
+      setUsers(nextUsers)
+      setRoleDrafts((prev) => {
+        const next = {}
+        nextUsers.forEach((u) => {
+          const id = String(u._id)
+          next[id] = prev[id] || u.role || 'student'
+        })
+        return next
+      })
     } catch (err) {
       console.error(err)
       setUsers([])
+      setRoleDrafts({})
     } finally {
       setLoading(false)
     }
@@ -75,6 +87,29 @@ export default function Members() {
     }
   }
 
+  async function updateUserRole(targetId) {
+    if (!auth?.token || roleBusyId) return
+    setRoleBusyId(String(targetId))
+    try {
+      await fetchJson(`/api/admin/users/${targetId}/role`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.token}`
+        },
+        body: JSON.stringify({
+          role: roleDrafts[String(targetId)]
+        })
+      })
+      await fetchUsers()
+      alert('Đổi role thành công')
+    } catch (err) {
+      alert(err.message || 'Không thể đổi role')
+    } finally {
+      setRoleBusyId(null)
+    }
+  }
+
   if (loading) return <div className="p-6">Đang tải…</div>
 
   return (
@@ -119,6 +154,36 @@ export default function Members() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  {role === 'admin' && (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={roleDrafts[String(u._id)] || u.role}
+                        onChange={(e) =>
+                          setRoleDrafts((prev) => ({
+                            ...prev,
+                            [String(u._id)]: e.target.value
+                          }))
+                        }
+                        className="rounded-xl border border-slate-200 px-2 py-1 text-xs"
+                      >
+                        <option value="student">student</option>
+                        <option value="moderator">moderator</option>
+                        <option value="admin">admin</option>
+                      </select>
+                      <button
+                        type="button"
+                        disabled={
+                          roleBusyId === String(u._id) ||
+                          roleDrafts[String(u._id)] === u.role ||
+                          String(user?._id) === String(u._id)
+                        }
+                        onClick={() => updateUserRole(u._id)}
+                        className="rounded-xl bg-blue-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                      >
+                        {roleBusyId === String(u._id) ? 'Đang đổi...' : 'Đổi role'}
+                      </button>
+                    </div>
+                  )}
                   {auth?.token && !self && (
                     <>
                       <button
