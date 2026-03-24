@@ -34,6 +34,39 @@ router.patch("/users/:id/toggle", verifyToken, verifyAdmin, async (req, res) => 
     }
 });
 
+router.patch("/users/:id/role", verifyToken, verifyAdmin, async (req, res) => {
+    try {
+        const { role } = req.body;
+        const allowedRoles = ["student", "moderator", "admin"];
+
+        if (!allowedRoles.includes(role)) {
+            return res.status(400).json({
+                message: "Role không hợp lệ. Chỉ chấp nhận student, moderator, admin"
+            });
+        }
+
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            return res.status(404).json({ message: "User không tồn tại" });
+        }
+
+        if (user._id.toString() === req.user.id) {
+            return res.status(400).json({ message: "Không thể tự đổi role của chính mình" });
+        }
+
+        user.role = role;
+        await user.save();
+
+        res.json({
+            message: "Đổi role thành công",
+            user
+        });
+    } catch (err) {
+        console.error("CHANGE USER ROLE ERROR:", err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
 
 // ================= TOPICS =================
 

@@ -65,7 +65,7 @@ export default function Login() {
             Đăng nhập để tiếp tục học tập và trao đổi cùng cộng đồng FPT.
           </div>
           <div className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
-            Theo dõi bài viết theo môn học, tham gia thảo luận và quản lý hoạt động của bạn trên diễn đàn một cách thuận tiện.
+            Theo dõi bài viết theo môn học, tham gia thảo luận, lưu lại những nội dung quan trọng và quản lý hoạt động của bạn trên diễn đàn.
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
