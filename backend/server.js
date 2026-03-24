@@ -239,7 +239,13 @@ function packDmRest(doc) {
     fromId: from?._id != null ? String(from._id) : String(doc.from),
     toId: to?._id != null ? String(to._id) : String(doc.to),
     fromName: from?.name || "",
-    toName: to?.name || ""
+    toName: to?.name || "",
+    reactions: Array.isArray(doc.reactions)
+      ? doc.reactions.map((r) => ({
+          userId: String(r.userId),
+          emoji: r.emoji
+        }))
+      : []
   };
 }
 
@@ -437,6 +443,110 @@ app.get("/api/messages/with/:otherUserId", verifyToken, async (req, res) => {
     res.json(list.map(packDmRest));
   } catch (err) {
     res.status(500).json({ message: "Lỗi tải tin nhắn", error: err.message });
+  }
+});
+
+app.get("/api/notifications", verifyToken, async (req, res) => {
+  try {
+    const meId = req.user.id;
+    const meObjectId = new mongoose.Types.ObjectId(meId);
+
+    const [directMessages, moderatedPosts, postComments] = await Promise.all([
+      DirectMessage.find({ to: meId })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .populate("from", "name")
+        .select("from text createdAt")
+        .lean(),
+      Post.find({
+        authorId: meId,
+        status: { $in: ["approved", "rejected"] }
+      })
+        .sort({ updatedAt: -1 })
+        .limit(20)
+        .select("title status moderationReason updatedAt")
+        .lean(),
+      Comment.aggregate([
+        { $sort: { createdAt: -1 } },
+        {
+          $lookup: {
+            from: "posts",
+            localField: "postId",
+            foreignField: "_id",
+            as: "post"
+          }
+        },
+        { $unwind: "$post" },
+        {
+          $match: {
+            "post.authorId": meObjectId,
+            authorId: { $ne: meObjectId }
+          }
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "authorId",
+            foreignField: "_id",
+            as: "author"
+          }
+        },
+        { $unwind: { path: "$author", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1,
+            content: 1,
+            createdAt: 1,
+            "post._id": 1,
+            "post.title": 1,
+            "author.name": 1
+          }
+        },
+        { $limit: 20 }
+      ])
+    ]);
+
+    const dmItems = directMessages.map((dm) => ({
+      _id: `dm-${dm._id}`,
+      title: `Tin nhắn mới từ ${dm.from?.name || "Thành viên"}`,
+      desc: dm.text,
+      type: "message",
+      read: false,
+      createdAt: dm.createdAt
+    }));
+
+    const postStatusItems = moderatedPosts.map((post) => ({
+      _id: `post-status-${post._id}`,
+      title:
+        post.status === "approved"
+          ? "Bài viết của bạn đã được duyệt"
+          : "Bài viết của bạn bị từ chối",
+      desc:
+        post.status === "rejected" && post.moderationReason
+          ? `${post.title || "(Không tiêu đề)"} - Lý do: ${post.moderationReason}`
+          : post.title || "(Không tiêu đề)",
+      type: "post",
+      read: false,
+      createdAt: post.updatedAt || post.createdAt || new Date()
+    }));
+
+    const commentItems = postComments.map((c) => ({
+      _id: `comment-${c._id}`,
+      title: `Bài viết của bạn có bình luận mới`,
+      desc: `${c.author?.name || "Thành viên"}: ${c.content || ""}`,
+      type: "post",
+      read: false,
+      createdAt: c.createdAt,
+      postId: c.post?._id
+    }));
+
+    const items = [...dmItems, ...postStatusItems, ...commentItems]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 50);
+
+    return res.json(items);
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi tải thông báo", error: err.message });
   }
 });
 
@@ -726,7 +836,10 @@ app.get("/api/posts/:id", async (req, res) => {
       }
     }
 
-    const comments = await Comment.find({ postId: req.params.id });
+    const comments = await Comment.find({ postId: req.params.id })
+      .sort({ createdAt: -1 })
+      .populate("authorId", "name email")
+      .lean();
 
     res.json({ post, comments });
   } catch (err) {
@@ -769,6 +882,60 @@ app.post("/api/posts/:id/comments", verifyToken, async (req, res) => {
   });
 
   res.json(comment);
+});
+
+app.patch("/api/posts/:id/reactions", verifyToken, async (req, res) => {
+  try {
+    const emoji = String(req.body?.emoji || "").trim();
+    if (!emoji) {
+      return res.status(400).json({ message: "Thiếu emoji" });
+    }
+    const post = await Post.findById(req.params.id);
+    if (!post) {
+      return res.status(404).json({ message: "Không tìm thấy bài viết" });
+    }
+
+    const userId = String(req.user.id);
+    const reactions = Array.isArray(post.reactions) ? post.reactions : [];
+    const idx = reactions.findIndex(
+      (r) => String(r.userId) === userId && String(r.emoji) === emoji
+    );
+    if (idx >= 0) reactions.splice(idx, 1);
+    else reactions.push({ userId, emoji });
+    post.reactions = reactions;
+    await post.save();
+
+    return res.json({ _id: post._id, reactions: post.reactions });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi cập nhật cảm xúc bài viết", error: err.message });
+  }
+});
+
+app.patch("/api/comments/:id/reactions", verifyToken, async (req, res) => {
+  try {
+    const emoji = String(req.body?.emoji || "").trim();
+    if (!emoji) {
+      return res.status(400).json({ message: "Thiếu emoji" });
+    }
+    const c = await Comment.findById(req.params.id);
+    if (!c) {
+      return res.status(404).json({ message: "Không tìm thấy bình luận" });
+    }
+    const reactions = Array.isArray(c.reactions) ? c.reactions : [];
+    const userId = String(req.user.id);
+    const idx = reactions.findIndex(
+      (r) => String(r.userId) === userId && String(r.emoji) === emoji
+    );
+    if (idx >= 0) reactions.splice(idx, 1);
+    else reactions.push({ userId, emoji });
+    c.reactions = reactions;
+    await c.save();
+
+    const out = await Comment.findById(c._id).populate("authorId", "name email").lean();
+    return res.json(out);
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi cập nhật cảm xúc", error: err.message });
+  }
 });
 
 

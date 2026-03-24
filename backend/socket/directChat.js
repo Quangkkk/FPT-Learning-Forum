@@ -11,7 +11,13 @@ function packMessage(doc) {
     fromId: from?._id != null ? String(from._id) : String(doc.from),
     toId: to?._id != null ? String(to._id) : String(doc.to),
     fromName: from?.name || "",
-    toName: to?.name || ""
+    toName: to?.name || "",
+    reactions: Array.isArray(doc.reactions)
+      ? doc.reactions.map((r) => ({
+          userId: String(r.userId),
+          emoji: r.emoji
+        }))
+      : []
   };
 }
 
@@ -76,6 +82,47 @@ module.exports = function attachDirectChat(io, { DirectMessage, User, jwt, JWT_S
         return cb({ ok: true, message: out });
       } catch (err) {
         return cb({ ok: false, message: err.message || "Lỗi gửi tin" });
+      }
+    });
+
+    socket.on("dm:react", async (payload, callback) => {
+      const cb = typeof callback === "function" ? callback : () => {};
+      try {
+        const messageId = String(payload?.messageId || "").trim();
+        const emoji = String(payload?.emoji || "").trim();
+        if (!mongoose.Types.ObjectId.isValid(messageId) || !emoji) {
+          return cb({ ok: false, message: "Dữ liệu cảm xúc không hợp lệ" });
+        }
+
+        const msg = await DirectMessage.findById(messageId);
+        if (!msg) {
+          return cb({ ok: false, message: "Không tìm thấy tin nhắn" });
+        }
+        const fromId = String(msg.from);
+        const toId = String(msg.to);
+        if (uid !== fromId && uid !== toId) {
+          return cb({ ok: false, message: "Bạn không có quyền thao tác" });
+        }
+
+        const reactions = Array.isArray(msg.reactions) ? msg.reactions : [];
+        const idx = reactions.findIndex(
+          (r) => String(r.userId) === uid && String(r.emoji) === emoji
+        );
+        if (idx >= 0) reactions.splice(idx, 1);
+        else reactions.push({ userId: uid, emoji });
+        msg.reactions = reactions;
+        await msg.save();
+
+        const doc = await DirectMessage.findById(messageId)
+          .populate("from", "name")
+          .populate("to", "name")
+          .lean();
+        const out = packMessage(doc);
+        io.to(`user:${fromId}`).emit("dm:update", out);
+        io.to(`user:${toId}`).emit("dm:update", out);
+        return cb({ ok: true, message: out });
+      } catch (err) {
+        return cb({ ok: false, message: err.message || "Lỗi thả cảm xúc" });
       }
     });
   });
