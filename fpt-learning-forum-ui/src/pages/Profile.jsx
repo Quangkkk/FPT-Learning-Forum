@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { MessageCircle, UserPlus, UserMinus } from 'lucide-react'
+import { MessageCircle, UserPlus, UserMinus, UserCircle2, ShieldCheck, FileText } from 'lucide-react'
 import { Card, CardBody } from '../components/Card'
 import { useAuth } from '../lib/auth'
 import { fetchJson } from '../lib/api'
@@ -91,24 +91,22 @@ export default function Profile() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl bg-white p-6 shadow-soft">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="text-2xl font-bold">{profile.name}</div>
-            <div className="mt-1 text-sm text-slate-600">
-              {profile.role}
-              {profile.email ? ` · ${profile.email}` : ''}
+      <div className="rounded-[30px] border border-[rgba(0,102,179,0.14)] bg-[linear-gradient(135deg,var(--blue-soft),white)] p-6 shadow-soft">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="rounded-3xl bg-[rgba(0,102,179,0.1)] p-4">
+              <UserCircle2 className="h-12 w-12 text-[var(--fpt-blue)]" />
             </div>
-            <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-600">
-              <span>
-                <strong className="text-slate-800">{profile.followerCount}</strong> người theo dõi
-              </span>
-              <span>
-                <strong className="text-slate-800">{profile.followingCount}</strong> đang theo dõi
-              </span>
-              <span>
-                <strong className="text-slate-800">{profile.postCount}</strong> bài viết
-              </span>
+            <div className="min-w-0">
+              <div className="section-kicker">Profile</div>
+              <div className="truncate text-2xl font-bold text-slate-900">{profile.name}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2.5 py-1">
+                  <ShieldCheck className="h-3.5 w-3.5 text-[var(--fpt-green)]" />
+                  {profile.role}
+                </span>
+                {profile.email && <span className="truncate">{profile.email}</span>}
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -146,6 +144,20 @@ export default function Profile() {
             )}
           </div>
         </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl bg-white/85 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Người theo dõi</div>
+            <div className="mt-1 text-2xl font-bold text-slate-900">{profile.followerCount}</div>
+          </div>
+          <div className="rounded-2xl bg-white/85 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Đang theo dõi</div>
+            <div className="mt-1 text-2xl font-bold text-slate-900">{profile.followingCount}</div>
+          </div>
+          <div className="rounded-2xl bg-white/85 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bài viết</div>
+            <div className="mt-1 text-2xl font-bold text-slate-900">{profile.postCount}</div>
+          </div>
+        </div>
         <Link to="/members" className="mt-4 inline-block text-sm font-semibold text-sky-700">
           ← Thành viên
         </Link>
@@ -153,7 +165,10 @@ export default function Profile() {
 
       <Card>
         <CardBody>
-          <div className="text-lg font-semibold">Bài viết gần đây</div>
+          <div className="flex items-center gap-2 text-lg font-semibold">
+            <FileText className="h-5 w-5 text-[var(--fpt-blue)]" />
+            Bài viết gần đây
+          </div>
           {posts.length === 0 ? (
             <div className="mt-2 text-sm text-slate-500">Chưa có bài viết.</div>
           ) : (
@@ -162,10 +177,14 @@ export default function Profile() {
                 <li key={post._id}>
                   <Link
                     to={`/post/${post._id}`}
-                    className="block rounded-xl border border-transparent px-2 py-2 text-sm font-medium hover:border-[rgba(0,102,179,0.12)] hover:bg-[var(--blue-soft)]"
+                    className="block rounded-2xl border border-transparent px-3 py-3 text-sm font-medium transition hover:border-[rgba(0,102,179,0.12)] hover:bg-[var(--blue-soft)]"
                   >
-                    {post.title || '(Không tiêu đề)'}
-                    <span className="ml-2 text-xs font-normal text-slate-500">{post.status}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>{post.title || '(Không tiêu đề)'}</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-600">
+                        {post.status}
+                      </span>
+                    </div>
                   </Link>
                 </li>
               ))}
