@@ -32,7 +32,7 @@ export default function Home() {
           Diễn đàn học tập dành cho sinh viên FPT University.
         </div>
         <div className="mt-2 max-w-2xl text-sm text-slate-600">
-          Trao đổi kiến thức theo môn học, chia sẻ tài liệu và kết nối với bạn học, mentor hoặc giảng viên trong một không gian rõ ràng, dễ sử dụng.
+          Trao đổi kiến thức theo chủ đề, chia sẻ tài liệu và kết nối với bạn học, mentor hoặc giảng viên trong một không gian rõ ràng, dễ sử dụng.
         </div>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link

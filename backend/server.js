@@ -33,8 +33,6 @@ const Category = require("./models/Category");
 const Topic = require("./models/Topic");
 
 /** Chỉ hiển thị danh mục này trên diễn đàn công khai (ẩn Marketing và category khác). */
-const PUBLIC_FORUM_CATEGORY_SLUG = "cong-nghe-thong-tin";
-
 const STATIC_FORUM_FALLBACK = {
   categories: [
     {
@@ -64,27 +62,30 @@ const STATIC_FORUM_FALLBACK = {
 
 async function buildForumPayload() {
   try {
-    const cat = await Category.findOne({ slug: PUBLIC_FORUM_CATEGORY_SLUG }).lean();
-    if (!cat) return STATIC_FORUM_FALLBACK;
-
-    const topicsDocs = await Topic.find({ categoryId: cat._id }).sort({ name: 1 }).lean();
-    if (!topicsDocs.length) return STATIC_FORUM_FALLBACK;
+    const [categoriesDocs, topicsDocs] = await Promise.all([
+      Category.find().sort({ name: 1 }).lean(),
+      Topic.find().sort({ name: 1 }).lean()
+    ]);
+    if (!categoriesDocs.length || !topicsDocs.length) return STATIC_FORUM_FALLBACK;
 
     const topics = {};
-    const topicSlugs = [];
+    const topicsByCategory = new Map();
+
     for (const t of topicsDocs) {
       topics[t.slug] = { name: t.name };
-      topicSlugs.push(t.slug);
+
+      const categoryKey = String(t.categoryId);
+      const current = topicsByCategory.get(categoryKey) || [];
+      current.push(t.slug);
+      topicsByCategory.set(categoryKey, current);
     }
 
     return {
-      categories: [
-        {
-          id: cat.slug,
-          name: cat.name,
-          topics: topicSlugs
-        }
-      ],
+      categories: categoriesDocs.map((cat) => ({
+        id: cat.slug,
+        name: cat.name,
+        topics: topicsByCategory.get(String(cat._id)) || []
+      })),
       topics
     };
   } catch {
@@ -94,10 +95,7 @@ async function buildForumPayload() {
 
 async function getPublicForumTopicIdValues() {
   try {
-    const cat = await Category.findOne({ slug: PUBLIC_FORUM_CATEGORY_SLUG }).lean();
-    if (!cat) return null;
-
-    const topicsDocs = await Topic.find({ categoryId: cat._id }).select("slug _id").lean();
+    const topicsDocs = await Topic.find().select("slug _id").lean();
     if (!topicsDocs.length) return null;
 
     const values = [];
@@ -142,6 +140,36 @@ const postStorage = multer.diskStorage({
 });
 const postUpload = multer({ storage: postStorage });
 
+const avatarUploadDir = path.join(__dirname, "uploads", "avatars");
+const avatarStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    fs.mkdirSync(avatarUploadDir, { recursive: true });
+    cb(null, avatarUploadDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || "").toLowerCase();
+    const baseName = path
+      .basename(file.originalname || "avatar", ext)
+      .replace(/[^a-zA-Z0-9-_]/g, "-")
+      .slice(0, 50);
+
+    cb(null, `${Date.now()}-${baseName || "avatar"}${ext}`);
+  }
+});
+const avatarUpload = multer({
+  storage: avatarStorage,
+  fileFilter: (_req, file, cb) => {
+    if (String(file.mimetype || "").startsWith("image/")) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Chi ho tro upload file anh"));
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024
+  }
+});
+
 
 // ================= AUTH =================
 app.get("/api/forum", async (req, res) => {
@@ -156,6 +184,25 @@ function normalizeFollowTargetId(raw) {
   const s = String(raw ?? "").trim();
   if (!s || !mongoose.Types.ObjectId.isValid(s)) return null;
   return s;
+}
+
+function escapeRegex(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function findUserByUsername(name, excludeUserId = null) {
+  const normalizedName = String(name || "").trim();
+  if (!normalizedName) return null;
+
+  const filter = {
+    name: { $regex: `^${escapeRegex(normalizedName)}$`, $options: "i" }
+  };
+
+  if (excludeUserId && mongoose.Types.ObjectId.isValid(String(excludeUserId))) {
+    filter._id = { $ne: excludeUserId };
+  }
+
+  return User.findOne(filter).select("_id name").lean();
 }
 
 async function followUserHandler(req, res) {
@@ -182,12 +229,16 @@ async function followUserHandler(req, res) {
 
     await User.updateOne({ _id: req.user.id }, { $addToSet: { following: targetId } });
 
-    const followerCount = await User.countDocuments({ following: targetId });
+    const [followerCount, me] = await Promise.all([
+      User.countDocuments({ following: targetId }),
+      User.findById(req.user.id).select("following").lean()
+    ]);
 
     return res.json({
       message: "Đã theo dõi",
       isFollowing: true,
-      followerCount
+      followerCount,
+      viewerFollowingCount: Array.isArray(me?.following) ? me.following.length : 0
     });
   } catch (err) {
     return res.status(500).json({ message: "Lỗi theo dõi", error: err.message });
@@ -207,12 +258,16 @@ async function unfollowUserHandler(req, res) {
 
     await User.updateOne({ _id: req.user.id }, { $pull: { following: targetId } });
 
-    const followerCount = await User.countDocuments({ following: targetId });
+    const [followerCount, me] = await Promise.all([
+      User.countDocuments({ following: targetId }),
+      User.findById(req.user.id).select("following").lean()
+    ]);
 
     return res.json({
       message: "Đã bỏ theo dõi",
       isFollowing: false,
-      followerCount
+      followerCount,
+      viewerFollowingCount: Array.isArray(me?.following) ? me.following.length : 0
     });
   } catch (err) {
     return res.status(500).json({ message: "Lỗi bỏ theo dõi", error: err.message });
@@ -239,7 +294,13 @@ function packDmRest(doc) {
     fromId: from?._id != null ? String(from._id) : String(doc.from),
     toId: to?._id != null ? String(to._id) : String(doc.to),
     fromName: from?.name || "",
-    toName: to?.name || ""
+    toName: to?.name || "",
+    reactions: Array.isArray(doc.reactions)
+      ? doc.reactions.map((r) => ({
+        userId: String(r.userId),
+        emoji: r.emoji
+      }))
+      : []
   };
 }
 
@@ -280,6 +341,7 @@ app.get("/api/users", async (req, res) => {
         _id: u._id,
         name: u.name,
         email: u.email,
+        avatar: u.avatar || "",
         role: u.role,
         active: u.active,
         isVerify: u.isVerify,
@@ -307,7 +369,7 @@ app.get("/api/users/:id/profile", async (req, res) => {
       return res.status(400).json({ message: "ID không hợp lệ" });
     }
 
-    const u = await User.findById(id).select("name email role active following isVerify").lean();
+    const u = await User.findById(id).select("name email avatar role active following isVerify").lean();
     if (!u) {
       return res.status(404).json({ message: "Không tìm thấy người dùng" });
     }
@@ -331,6 +393,7 @@ app.get("/api/users/:id/profile", async (req, res) => {
     return res.json({
       _id: u._id,
       name: u.name,
+      avatar: u.avatar || "",
       role: u.role,
       active: u.active !== false,
       isVerify: u.isVerify,
@@ -342,6 +405,119 @@ app.get("/api/users/:id/profile", async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ message: "Lỗi tải profile", error: err.message });
+  }
+});
+
+app.patch("/api/users/:id/profile", verifyToken, async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID khong hop le" });
+    }
+
+    const isSelf = String(req.user.id) === id;
+    const isAdmin = req.user.role === "admin";
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ message: "Ban khong co quyen cap nhat ho so nay" });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "Khong tim thay nguoi dung" });
+    }
+
+    const normalizedName = String(req.body?.name || "").trim();
+    const normalizedEmail = String(req.body?.email || "").trim().toLowerCase();
+    const normalizedPassword = String(req.body?.password || "");
+
+    if (!normalizedName || !normalizedEmail) {
+      return res.status(400).json({ message: "Ten va email la bat buoc" });
+    }
+
+    const existingUsername = await findUserByUsername(normalizedName, id);
+    if (existingUsername) {
+      return res.status(409).json({ message: "Username da ton tai" });
+    }
+
+    if (normalizedPassword && normalizedPassword.length < 6) {
+      return res.status(400).json({ message: "Mat khau toi thieu 6 ky tu" });
+    }
+
+    const existing = await User.findOne({ email: normalizedEmail }).select("_id").lean();
+    if (existing && String(existing._id) !== id) {
+      return res.status(409).json({ message: "Email da duoc su dung" });
+    }
+
+    user.name = normalizedName;
+    user.email = normalizedEmail;
+    if (normalizedPassword) {
+      user.password = normalizedPassword;
+    }
+    await user.save();
+
+    return res.json({
+      message: "Cap nhat ho so thanh cong",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar || "",
+        role: user.role,
+        active: user.active !== false,
+        isVerify: user.isVerify
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Loi cap nhat ho so", error: err.message });
+  }
+});
+
+app.patch("/api/users/:id/avatar", verifyToken, (req, res, next) => {
+  avatarUpload.single("avatar")(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ message: err.message || "Upload avatar that bai" });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID khong hop le" });
+    }
+
+    const isSelf = String(req.user.id) === id;
+    const isAdmin = req.user.role === "admin";
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ message: "Ban khong co quyen cap nhat avatar nay" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "Vui long chon anh dai dien" });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "Khong tim thay nguoi dung" });
+    }
+
+    user.avatar = `/uploads/avatars/${req.file.filename}`;
+    await user.save();
+
+    return res.json({
+      message: "Cap nhat avatar thanh cong",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar || "",
+        role: user.role,
+        active: user.active !== false,
+        isVerify: user.isVerify
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Loi cap nhat avatar", error: err.message });
   }
 });
 
@@ -368,6 +544,58 @@ app.get("/api/users/:id/posts", async (req, res) => {
     return res.json(posts);
   } catch (err) {
     return res.status(500).json({ message: "Lỗi tải bài viết", error: err.message });
+  }
+});
+
+app.get("/api/search/users", async (req, res) => {
+  try {
+    const q = String(req.query.q || "").trim();
+    if (!q) {
+      return res.json([]);
+    }
+
+    const pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    const users = await User.find({
+      $or: [{ name: pattern }, { email: pattern }]
+    })
+      .select("name email role active")
+      .limit(10)
+      .lean();
+
+    return res.json(users);
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi tìm thành viên", error: err.message });
+  }
+});
+
+app.get("/api/search/posts", async (req, res) => {
+  try {
+    const q = String(req.query.q || "").trim();
+    if (!q) {
+      return res.json([]);
+    }
+
+    const pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    const bypass = canBypassForumTopicFilter(req);
+    const allowed = bypass ? null : await getPublicForumTopicIdValues();
+
+    const filter = {
+      $or: [{ title: pattern }, { content: pattern }]
+    };
+
+    if (!bypass && allowed?.length) {
+      filter.topicId = { $in: allowed };
+    }
+
+    const posts = await Post.find(filter)
+      .populate("authorId", "name email")
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    return res.json(posts);
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi tìm bài viết", error: err.message });
   }
 });
 
@@ -440,6 +668,110 @@ app.get("/api/messages/with/:otherUserId", verifyToken, async (req, res) => {
   }
 });
 
+app.get("/api/notifications", verifyToken, async (req, res) => {
+  try {
+    const meId = req.user.id;
+    const meObjectId = new mongoose.Types.ObjectId(meId);
+
+    const [directMessages, moderatedPosts, postComments] = await Promise.all([
+      DirectMessage.find({ to: meId })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .populate("from", "name")
+        .select("from text createdAt")
+        .lean(),
+      Post.find({
+        authorId: meId,
+        status: { $in: ["approved", "rejected"] }
+      })
+        .sort({ updatedAt: -1 })
+        .limit(20)
+        .select("title status moderationReason updatedAt")
+        .lean(),
+      Comment.aggregate([
+        { $sort: { createdAt: -1 } },
+        {
+          $lookup: {
+            from: "posts",
+            localField: "postId",
+            foreignField: "_id",
+            as: "post"
+          }
+        },
+        { $unwind: "$post" },
+        {
+          $match: {
+            "post.authorId": meObjectId,
+            authorId: { $ne: meObjectId }
+          }
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "authorId",
+            foreignField: "_id",
+            as: "author"
+          }
+        },
+        { $unwind: { path: "$author", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1,
+            content: 1,
+            createdAt: 1,
+            "post._id": 1,
+            "post.title": 1,
+            "author.name": 1
+          }
+        },
+        { $limit: 20 }
+      ])
+    ]);
+
+    const dmItems = directMessages.map((dm) => ({
+      _id: `dm-${dm._id}`,
+      title: `Tin nhắn mới từ ${dm.from?.name || "Thành viên"}`,
+      desc: dm.text,
+      type: "message",
+      read: false,
+      createdAt: dm.createdAt
+    }));
+
+    const postStatusItems = moderatedPosts.map((post) => ({
+      _id: `post-status-${post._id}`,
+      title:
+        post.status === "approved"
+          ? "Bài viết của bạn đã được duyệt"
+          : "Bài viết của bạn bị từ chối",
+      desc:
+        post.status === "rejected" && post.moderationReason
+          ? `${post.title || "(Không tiêu đề)"} - Lý do: ${post.moderationReason}`
+          : post.title || "(Không tiêu đề)",
+      type: "post",
+      read: false,
+      createdAt: post.updatedAt || post.createdAt || new Date()
+    }));
+
+    const commentItems = postComments.map((c) => ({
+      _id: `comment-${c._id}`,
+      title: `Bài viết của bạn có bình luận mới`,
+      desc: `${c.author?.name || "Thành viên"}: ${c.content || ""}`,
+      type: "post",
+      read: false,
+      createdAt: c.createdAt,
+      postId: c.post?._id
+    }));
+
+    const items = [...dmItems, ...postStatusItems, ...commentItems]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 50);
+
+    return res.json(items);
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi tải thông báo", error: err.message });
+  }
+});
+
 app.post("/api/auth/register", async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -452,40 +784,33 @@ app.post("/api/auth/register", async (req, res) => {
       return res.status(400).json({ message: "Name, email, password là bắt buộc" });
     }
 
+    const existing = await User.findOne({ email: normalizedEmail }).select("_id").lean();
+    const existingUsername = await findUserByUsername(normalizedName);
+    if (existingUsername) {
+      return res.status(409).json({ message: "Username da ton tai" });
+    }
+
     if (rawPassword.length < 6) {
       return res.status(400).json({ message: "Mật khẩu tối thiểu 6 ký tự" });
     }
 
-    const existing = await User.findOne({ email: normalizedEmail });
-    if (existing && existing.isVerify) {
+    if (existing) {
       return res.status(409).json({ message: "Email đã được đăng ký" });
     }
 
     const verifyToken = crypto.randomBytes(32).toString("hex");
     const verifyTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    let user;
-    if (existing) {
-      existing.name = normalizedName;
-      existing.password = rawPassword;
-      existing.role = "student";
-      existing.active = true;
-      existing.isVerify = false;
-      existing.verifyToken = verifyToken;
-      existing.verifyTokenExpires = verifyTokenExpires;
-      user = await existing.save();
-    } else {
-      user = await User.create({
-        name: normalizedName,
-        email: normalizedEmail,
-        password: rawPassword,
-        role: "student",
-        active: true,
-        isVerify: false,
-        verifyToken,
-        verifyTokenExpires
-      });
-    }
+    const user = await User.create({
+      name: normalizedName,
+      email: normalizedEmail,
+      password: rawPassword,
+      role: "student",
+      active: true,
+      isVerify: false,
+      verifyToken,
+      verifyTokenExpires
+    });
 
     const clientBaseUrl = process.env.CLIENT_URL || "http://localhost:5173";
     const verifyUrl = `${clientBaseUrl}/verify-email?token=${encodeURIComponent(verifyToken)}`;
@@ -606,6 +931,7 @@ app.post("/api/auth/login", async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      avatar: user.avatar || "",
       role: user.role,
       active: user.active !== false,
       isVerify: user.isVerify
@@ -726,7 +1052,10 @@ app.get("/api/posts/:id", async (req, res) => {
       }
     }
 
-    const comments = await Comment.find({ postId: req.params.id });
+    const comments = await Comment.find({ postId: req.params.id })
+      .sort({ createdAt: -1 })
+      .populate("authorId", "name email")
+      .lean();
 
     res.json({ post, comments });
   } catch (err) {
@@ -769,6 +1098,60 @@ app.post("/api/posts/:id/comments", verifyToken, async (req, res) => {
   });
 
   res.json(comment);
+});
+
+app.patch("/api/posts/:id/reactions", verifyToken, async (req, res) => {
+  try {
+    const emoji = String(req.body?.emoji || "").trim();
+    if (!emoji) {
+      return res.status(400).json({ message: "Thiếu emoji" });
+    }
+    const post = await Post.findById(req.params.id);
+    if (!post) {
+      return res.status(404).json({ message: "Không tìm thấy bài viết" });
+    }
+
+    const userId = String(req.user.id);
+    const reactions = Array.isArray(post.reactions) ? post.reactions : [];
+    const idx = reactions.findIndex(
+      (r) => String(r.userId) === userId && String(r.emoji) === emoji
+    );
+    if (idx >= 0) reactions.splice(idx, 1);
+    else reactions.push({ userId, emoji });
+    post.reactions = reactions;
+    await post.save();
+
+    return res.json({ _id: post._id, reactions: post.reactions });
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi cập nhật cảm xúc bài viết", error: err.message });
+  }
+});
+
+app.patch("/api/comments/:id/reactions", verifyToken, async (req, res) => {
+  try {
+    const emoji = String(req.body?.emoji || "").trim();
+    if (!emoji) {
+      return res.status(400).json({ message: "Thiếu emoji" });
+    }
+    const c = await Comment.findById(req.params.id);
+    if (!c) {
+      return res.status(404).json({ message: "Không tìm thấy bình luận" });
+    }
+    const reactions = Array.isArray(c.reactions) ? c.reactions : [];
+    const userId = String(req.user.id);
+    const idx = reactions.findIndex(
+      (r) => String(r.userId) === userId && String(r.emoji) === emoji
+    );
+    if (idx >= 0) reactions.splice(idx, 1);
+    else reactions.push({ userId, emoji });
+    c.reactions = reactions;
+    await c.save();
+
+    const out = await Comment.findById(c._id).populate("authorId", "name email").lean();
+    return res.json(out);
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi cập nhật cảm xúc", error: err.message });
+  }
 });
 
 

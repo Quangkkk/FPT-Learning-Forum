@@ -1,5 +1,13 @@
 const mongoose = require("mongoose");
 
+const reactionSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    emoji: { type: String, required: true, trim: true, maxlength: 16 }
+  },
+  { _id: false }
+);
+
 const mediaSchema = new mongoose.Schema({
   kind: {
     type: String,
@@ -54,6 +62,11 @@ const postSchema = new mongoose.Schema({
 
   media: {
     type: [mediaSchema],
+    default: []
+  },
+
+  reactions: {
+    type: [reactionSchema],
     default: []
   }
 }, { timestamps: true });

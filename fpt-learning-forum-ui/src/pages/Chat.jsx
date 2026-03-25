@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Send } from 'lucide-react'
+import { ArrowLeft, Send, Smile } from 'lucide-react'
 import { Card, CardBody } from '../components/Card'
 import { useAuth } from '../lib/auth'
 import { useChat } from '../lib/chat'
 import { fetchJson } from '../lib/api'
+
+const DM_REACTIONS = ['👍', '❤️', '😂', '😮', '😢']
 
 export default function Chat() {
   const { peerId } = useParams()
@@ -17,6 +19,7 @@ export default function Chat() {
   const [loadingList, setLoadingList] = useState(true)
   const [loadingThread, setLoadingThread] = useState(false)
   const [sendBusy, setSendBusy] = useState(false)
+  const [openReactionPickerId, setOpenReactionPickerId] = useState(null)
   const bottomRef = useRef(null)
 
   const peerKey = peerId ? String(peerId) : ''
@@ -110,8 +113,16 @@ export default function Chat() {
       })
     }
     socket.on('dm', onDm)
+    function onDmUpdate(updated) {
+      if (!updated?._id) return
+      setMessages((prev) =>
+        prev.map((m) => (String(m._id) === String(updated._id) ? { ...m, ...updated } : m))
+      )
+    }
+    socket.on('dm:update', onDmUpdate)
     return () => {
       socket.off('dm', onDm)
+      socket.off('dm:update', onDmUpdate)
     }
   }, [socket, peerKey, me?._id])
 
@@ -133,6 +144,28 @@ export default function Chat() {
         })
       }
     })
+  }
+
+  function toggleReaction(messageId, emoji) {
+    if (!socket || !messageId) return
+    socket.emit('dm:react', { messageId, emoji }, () => {})
+  }
+
+  function summarizeReactions(message) {
+    const list = Array.isArray(message?.reactions) ? message.reactions : []
+    const map = new Map()
+    for (const r of list) {
+      const key = String(r.emoji || '')
+      if (!key) continue
+      map.set(key, (map.get(key) || 0) + 1)
+    }
+    return Array.from(map.entries()).map(([emoji, count]) => ({ emoji, count }))
+  }
+
+  function shortTime(value) {
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return ''
+    return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
   }
 
   const activePeerName = useMemo(() => {
@@ -171,16 +204,23 @@ export default function Chat() {
               <ul>
                 {conversations.map((c) => {
                   const active = String(c.peerId) === peerKey
+                  const initial = (c.peerName || 'T').trim().charAt(0).toUpperCase()
                   return (
                     <li key={String(c.peerId)}>
                       <Link
                         to={`/chat/${c.peerId}`}
-                        className={`block border-b border-[var(--border)] px-4 py-3 text-left transition hover:bg-[var(--blue-soft)] ${
+                        className={`flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 text-left transition hover:bg-[var(--blue-soft)] ${
                           active ? 'bg-[var(--orange-soft)]' : ''
                         }`}
                       >
-                        <div className="font-semibold">{c.peerName || 'Thành viên'}</div>
-                        <div className="truncate text-xs text-slate-500">{c.lastText}</div>
+                        <div className="grid h-10 w-10 place-items-center rounded-full bg-[var(--blue-soft)] text-sm font-bold text-[var(--fpt-blue)]">
+                          {initial}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold">{c.peerName || 'Thành viên'}</div>
+                          <div className="truncate text-xs text-slate-500">{c.lastText}</div>
+                        </div>
+                        <div className="text-[10px] text-slate-400">{shortTime(c.lastAt)}</div>
                       </Link>
                     </li>
                   )
@@ -210,6 +250,7 @@ export default function Chat() {
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">{activePeerName}</div>
+                  <div className="text-[11px] text-emerald-600">{connected ? 'Đang hoạt động' : 'Ngoại tuyến'}</div>
                   <Link
                     to={`/profile/${peerKey}`}
                     className="text-xs font-semibold text-sky-700 hover:underline"
@@ -224,24 +265,74 @@ export default function Chat() {
                 ) : (
                   messages.map((m) => {
                     const mine = String(m.fromId) === String(me?._id)
+                    const reactionSummary = summarizeReactions(m)
                     return (
                       <div
                         key={String(m._id)}
                         className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
                       >
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                            mine
-                              ? 'bg-[var(--fpt-blue)] text-white'
-                              : 'bg-[var(--blue-soft)] text-slate-800'
-                          }`}
-                        >
-                          {!mine && (
-                            <div className="mb-1 text-[10px] font-semibold uppercase opacity-70">
-                              {m.fromName}
+                        <div className={`group max-w-[85%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
+                          <div
+                            className={`rounded-2xl px-3 py-2 text-sm ${
+                              mine
+                                ? 'bg-[var(--fpt-blue)] text-white'
+                                : 'bg-[var(--blue-soft)] text-slate-800'
+                            }`}
+                          >
+                            {!mine && (
+                              <div className="mb-1 text-[10px] font-semibold uppercase opacity-70">
+                                {m.fromName}
+                              </div>
+                            )}
+                            <div className="whitespace-pre-wrap break-words">{m.text}</div>
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-400">{shortTime(m.createdAt)}</div>
+                          {reactionSummary.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {reactionSummary.map((r) => (
+                                <button
+                                  key={`${m._id}-${r.emoji}`}
+                                  type="button"
+                                  onClick={() => toggleReaction(m._id, r.emoji)}
+                                  className={`rounded-full border px-2 py-0.5 text-xs ${
+                                    mine ? 'border-white/30 bg-white/20 text-white' : 'border-slate-200 bg-white'
+                                  }`}
+                                >
+                                  {r.emoji} {r.count}
+                                </button>
+                              ))}
                             </div>
                           )}
-                          <div className="whitespace-pre-wrap break-words">{m.text}</div>
+                          <div className="relative mt-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOpenReactionPickerId((prev) => (prev === m._id ? null : m._id))
+                              }
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] opacity-0 transition group-hover:opacity-100 ${
+                                mine ? 'hover:bg-white/20' : 'hover:bg-slate-100'
+                              }`}
+                            >
+                              <Smile className="h-3.5 w-3.5" /> Cảm xúc
+                            </button>
+                            {openReactionPickerId === m._id && (
+                              <div className="absolute bottom-[calc(100%+6px)] left-0 z-20 flex gap-1 rounded-full border border-slate-200 bg-white p-1 shadow-lg">
+                                {DM_REACTIONS.map((emoji) => (
+                                  <button
+                                    key={`${m._id}-pick-${emoji}`}
+                                    type="button"
+                                    onClick={() => {
+                                      toggleReaction(m._id, emoji)
+                                      setOpenReactionPickerId(null)
+                                    }}
+                                    className="rounded-full px-2 py-1 text-sm transition hover:bg-slate-100"
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )

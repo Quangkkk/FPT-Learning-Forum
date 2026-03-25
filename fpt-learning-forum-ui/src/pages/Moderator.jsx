@@ -4,6 +4,59 @@ import { Card, CardBody, CardHeader } from '../components/Card'
 import Badge from '../components/Badge'
 import { RequireRole, useAuth } from '../lib/auth'
 
+function normalizePostMedia(post) {
+  const normalized = []
+
+  if (Array.isArray(post?.imageUrls)) {
+    post.imageUrls.forEach((url, index) => {
+      if (!url) return
+      normalized.push({ kind: 'image', url, name: `Image ${index + 1}` })
+    })
+  }
+
+  if (Array.isArray(post?.videoUrls)) {
+    post.videoUrls.forEach((url, index) => {
+      if (!url) return
+      normalized.push({ kind: 'video', url, name: `Video ${index + 1}` })
+    })
+  }
+
+  if (normalized.length > 0) return normalized
+
+  const sources = Array.isArray(post?.media) ? post.media : []
+
+  return sources
+    .map((item, index) => {
+      if (!item) return null
+
+      if (typeof item === 'string') {
+        const isVideo = item.startsWith('data:video/') || /\.(mp4|webm|ogg|mov)$/i.test(item)
+        return {
+          kind: isVideo ? 'video' : 'image',
+          name: `Media ${index + 1}`,
+          url: item
+        }
+      }
+
+      const url = item.url || item.src || item.path
+      if (!url) return null
+
+      const mimeType = String(item.mimeType || item.type || '')
+      const isVideo =
+        item.kind === 'video' ||
+        mimeType.startsWith('video/') ||
+        String(url).startsWith('data:video/') ||
+        /\.(mp4|webm|ogg|mov)$/i.test(String(url))
+
+      return {
+        kind: isVideo ? 'video' : 'image',
+        name: item.name || `Media ${index + 1}`,
+        url
+      }
+    })
+    .filter(Boolean)
+}
+
 function ModeratorInner() {
   const { user, auth } = useAuth()
   const [activeSection, setActiveSection] = useState('overview')
@@ -32,7 +85,7 @@ function ModeratorInner() {
       { key: 'overview', label: 'Tổng quan', icon: ClipboardList },
       { key: 'pending', label: 'Duyệt bài', icon: CheckCircle2, count: pending.length },
       { key: 'reports', label: 'Báo cáo', icon: Flag, count: reports.length },
-      { key: 'subjects', label: 'Môn học', icon: BookOpen, count: topics.length }
+      { key: 'subjects', label: 'Chủ đề', icon: BookOpen, count: topics.length }
     ],
     [pending.length, reports.length, topics.length]
   )
@@ -267,7 +320,7 @@ function ModeratorInner() {
     e.preventDefault()
 
     if (!topicForm.name.trim() || !topicForm.categoryId) {
-      alert('Vui lòng điền đủ tên môn và danh mục')
+      alert('Vui lòng điền đủ tên chủ đề và danh mục')
       return
     }
 
@@ -298,7 +351,7 @@ function ModeratorInner() {
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.message || 'Không thể lưu môn học')
+        alert(data.message || 'Không thể lưu chủ đề')
         return
       }
 
@@ -307,14 +360,14 @@ function ModeratorInner() {
       refresh()
     } catch (err) {
       console.error(err)
-      alert('Lỗi khi lưu môn học')
+      alert('Lỗi khi lưu chủ đề')
     } finally {
       setSavingTopic(false)
     }
   }
 
   async function deleteTopic(topicId) {
-    if (!window.confirm('Bạn có chắc muốn xóa môn học này?')) return
+    if (!window.confirm('Bạn có chắc muốn xóa chủ đề này?')) return
 
     if (!auth?.token) {
       alert('Bạn chưa đăng nhập')
@@ -332,7 +385,7 @@ function ModeratorInner() {
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.message || 'Không thể xóa môn học')
+        alert(data.message || 'Không thể xóa chủ đề')
         return
       }
 
@@ -343,13 +396,17 @@ function ModeratorInner() {
       refresh()
     } catch (err) {
       console.error(err)
-      alert('Lỗi khi xóa môn học')
+      alert('Lỗi khi xóa chủ đề')
     }
   }
 
   const editingTopic = useMemo(
     () => topics.find((topic) => topic._id === editingTopicId) || null,
     [topics, editingTopicId]
+  )
+  const pendingDetailMedia = useMemo(
+    () => normalizePostMedia(pendingDetailPost),
+    [pendingDetailPost]
   )
 
   return (
@@ -428,7 +485,7 @@ function ModeratorInner() {
             </Card>
             <Card>
               <CardBody>
-                <div className="text-xs text-slate-500">Môn học hiện có</div>
+                <div className="text-xs text-slate-500">Chủ đề hiện có</div>
                 <div className="mt-1 text-2xl font-bold text-sky-600">{topics.length}</div>
               </CardBody>
             </Card>
@@ -579,7 +636,7 @@ function ModeratorInner() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold">Quản lý môn học</div>
+                  <div className="text-sm font-semibold">Quản lý chủ đề</div>
                   <button
                     onClick={openCreateTopicModal}
                     className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
@@ -594,7 +651,7 @@ function ModeratorInner() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold">Danh sách môn học</div>
+                  <div className="text-sm font-semibold">Danh sách chủ đề</div>
                   <Badge tone="sky">{topics.length}</Badge>
                 </div>
               </CardHeader>
@@ -603,7 +660,7 @@ function ModeratorInner() {
                   <table className="w-full min-w-[640px] border-collapse text-sm">
                     <thead>
                       <tr className="bg-slate-50 text-left">
-                        <th className="px-3 py-2">Tên môn</th>
+                        <th className="px-3 py-2">Tên chủ đề</th>
                         <th className="px-3 py-2">Slug</th>
                         <th className="px-3 py-2">Danh mục</th>
                         <th className="px-3 py-2 text-right">Hành động</th>
@@ -657,9 +714,9 @@ function ModeratorInner() {
             <div className="flex items-center justify-between border-b px-5 py-4">
               <div>
                 <div className="text-base font-semibold">
-                  {editingTopicId ? 'Cập nhật môn học' : 'Tạo mới môn học'}
+                  {editingTopicId ? 'Cập nhật chủ đề' : 'Tạo mới chủ đề'}
                 </div>
-                <div className="mt-1 text-sm text-slate-500">Thêm thông tin tên môn và danh mục.</div>
+                <div className="mt-1 text-sm text-slate-500">Thêm thông tin tên chủ đề và danh mục.</div>
               </div>
               <button
                 onClick={closeTopicModal}
@@ -672,7 +729,7 @@ function ModeratorInner() {
             <form onSubmit={submitTopic} className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <label className="text-sm font-semibold">Tên môn học</label>
+                  <label className="text-sm font-semibold">Tên chủ đề</label>
                   <input
                     value={topicForm.name}
                     onChange={(e) => setTopicForm((prev) => ({ ...prev, name: e.target.value }))}
@@ -725,7 +782,7 @@ function ModeratorInner() {
           <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b px-5 py-4">
               <div>
-                <div className="text-base font-semibold">Chi tiết môn học</div>
+                <div className="text-base font-semibold">Chi tiết chủ đề</div>
                 <div className="mt-1 text-sm text-slate-500">{detailTopic.name}</div>
               </div>
               <button
@@ -799,6 +856,40 @@ function ModeratorInner() {
                 <div className="text-sm font-semibold">Nội dung</div>
                 <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{pendingDetailPost.content}</div>
               </div>
+              {pendingDetailMedia.length > 0 ? (
+                <div className="rounded-xl border p-4">
+                  <div className="text-sm font-semibold">Media dinh kem</div>
+                  <div className="mt-3 grid gap-4">
+                    {pendingDetailMedia.map((item, index) =>
+                      item.kind === 'video' ? (
+                        <div key={`pending-media-${index}`} className="rounded-xl border p-2">
+                          <video
+                            src={item.url}
+                            controls
+                            className="max-h-[420px] w-full rounded-lg bg-black/5"
+                          />
+                          <div className="mt-2 text-xs text-slate-500">{item.name}</div>
+                        </div>
+                      ) : (
+                        <a
+                          key={`pending-media-${index}`}
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block rounded-xl border p-2"
+                        >
+                          <img
+                            src={item.url}
+                            alt={item.name || `post-media-${index + 1}`}
+                            className="max-h-[420px] w-full rounded-lg object-contain"
+                          />
+                          <div className="mt-2 text-xs text-slate-500">{item.name}</div>
+                        </a>
+                      )
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

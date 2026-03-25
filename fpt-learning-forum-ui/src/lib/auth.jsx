@@ -94,6 +94,21 @@ export function AuthProvider({ children }) {
         return next
       },
 
+      updateAuthUser(nextUser) {
+        setAuth((prev) => {
+          if (!prev) return prev
+          const next = {
+            ...prev,
+            user: {
+              ...prev.user,
+              ...nextUser
+            }
+          }
+          saveAuth(next)
+          return next
+        })
+      },
+
       signOut() {
         clearAuth()
         setAuth(null)

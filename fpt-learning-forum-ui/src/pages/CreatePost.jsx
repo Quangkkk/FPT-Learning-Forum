@@ -2,18 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardBody } from '../components/Card'
 import { useAuth, RequireRole } from '../lib/auth'
+import { fetchJson } from '../lib/api'
 
 const MAX_FILES = 4
 const MAX_FILE_SIZE = 15 * 1024 * 1024
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = () => reject(new Error(`Không thể đọc file ${file.name}`))
-    reader.readAsDataURL(file)
-  })
-}
 
 function CreatePostInner() {
   const nav = useNavigate()
@@ -30,61 +22,75 @@ function CreatePostInner() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch('/api/forum')
-      .then((res) => res.json())
+    fetchJson('/api/forum')
       .then((data) => {
         setForum(data)
-        if (!topicId && data?.topics) {
+        if (data?.topics) {
           const first = Object.keys(data.topics)[0]
-          setTopicId(first)
+          setTopicId((current) => current || first)
         }
       })
-      .catch((err) => console.error(err))
+      .catch((err) => {
+        console.error(err)
+        setError(err?.message || 'Khong the tai danh sach chu de.')
+      })
   }, [])
 
   async function submit(e) {
     e.preventDefault()
     setError('')
-    if (!title.trim() || !content.trim()) return
+
+    if (!title.trim() || !content.trim()) {
+      setError('Vui long nhap tieu de va noi dung bai viet.')
+      return
+    }
+
+    if (!auth?.token) {
+      setError('Phien dang nhap da het han. Vui long dang nhap lai.')
+      return
+    }
 
     setSaving(true)
 
     try {
-      const media = await Promise.all(
-        mediaFiles.map(async (file) => ({
-          name: file.name,
-          mimeType: file.type,
-          url: await readFileAsDataUrl(file)
-        }))
-      )
+      const formData = new FormData()
+      formData.append('topicId', topicId)
+      formData.append('title', title.trim())
+      formData.append('content', content.trim())
+      formData.append('isAnonymous', String(isAnonymous))
+
+      mediaFiles.forEach((file) => {
+        const fieldName = file.type.startsWith('video/') ? 'video' : 'image'
+        formData.append(fieldName, file)
+      })
 
       const res = await fetch('/api/posts', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${auth.token}`
         },
-        body: JSON.stringify({
-          topicId,
-          title: title.trim(),
-          content: content.trim(),
-          authorId: auth.user._id,
-          isAnonymous,
-          media
-        })
+        body: formData
       })
 
-      if (!res.ok) {
-        throw new Error('Đăng bài thất bại')
+      const text = await res.text()
+      let data = null
+      try {
+        data = text ? JSON.parse(text) : null
+      } catch {
+        data = null
       }
 
-      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.message || 'Dang bai that bai')
+      }
+
       nav(`/post/${data._id}`)
     } catch (err) {
       console.error(err)
-      setError(err?.message || 'Đăng bài thất bại')
+      setError(err?.message || 'Dang bai that bai')
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   function handleFilesChange(e) {
@@ -94,13 +100,15 @@ function CreatePostInner() {
     )
 
     if (validFiles.length !== nextFiles.length) {
-      setError('Chỉ hỗ trợ file ảnh hoặc video.')
+      setError('Chi ho tro file anh hoac video.')
+      e.target.value = ''
       return
     }
 
     const oversized = validFiles.find((file) => file.size > MAX_FILE_SIZE)
     if (oversized) {
-      setError(`File ${oversized.name} vượt quá 15MB.`)
+      setError(`File ${oversized.name} vuot qua 15MB.`)
+      e.target.value = ''
       return
     }
 
@@ -108,7 +116,7 @@ function CreatePostInner() {
     setMediaFiles(merged)
     setError(
       mediaFiles.length + validFiles.length > MAX_FILES
-        ? `Chỉ có thể đính kèm tối đa ${MAX_FILES} file.`
+        ? `Chi co the dinh kem toi da ${MAX_FILES} file.`
         : ''
     )
 
@@ -126,7 +134,7 @@ function CreatePostInner() {
       <Card>
         <CardBody>
           <div className="section-kicker">Create</div>
-          <div className="mt-1 text-lg font-semibold">Đăng bài nhanh</div>
+          <div className="mt-1 text-lg font-semibold">Dang bai nhanh</div>
         </CardBody>
       </Card>
 
@@ -134,7 +142,7 @@ function CreatePostInner() {
         <CardBody>
           <form onSubmit={submit} className="space-y-3">
             <div>
-              <label className="text-sm font-semibold">Chủ đề</label>
+              <label className="text-sm font-semibold">Chu de</label>
               <select
                 value={topicId}
                 onChange={(e) => setTopicId(e.target.value)}
@@ -149,7 +157,7 @@ function CreatePostInner() {
             </div>
 
             <div>
-              <label className="text-sm font-semibold">Tiêu đề</label>
+              <label className="text-sm font-semibold">Tieu de</label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -158,7 +166,7 @@ function CreatePostInner() {
             </div>
 
             <div>
-              <label className="text-sm font-semibold">Nội dung</label>
+              <label className="text-sm font-semibold">Noi dung</label>
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
@@ -168,7 +176,7 @@ function CreatePostInner() {
             </div>
 
             <div>
-              <label className="text-sm font-semibold">Ảnh / Video đính kèm</label>
+              <label className="text-sm font-semibold">Anh / Video dinh kem</label>
               <input
                 type="file"
                 accept="image/*,video/*"
@@ -177,18 +185,24 @@ function CreatePostInner() {
                 className="mt-1 block w-full text-sm text-slate-600 file:mr-4 file:rounded-full file:border-0 file:bg-[var(--blue-soft)] file:px-4 file:py-2 file:font-semibold file:text-[var(--fpt-blue)]"
               />
               <div className="mt-1 text-xs text-slate-500">
-                Hỗ trợ tối đa 4 file, mỗi file không quá 15MB.
+                Ho tro toi da 4 file, moi file khong qua 15MB.
               </div>
 
               {mediaFiles.length > 0 && (
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {mediaFiles.map((file, index) => (
-                    <div key={`${file.name}-${index}`} className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-3">
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-3"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-slate-800">{file.name}</div>
+                          <div className="truncate text-sm font-semibold text-slate-800">
+                            {file.name}
+                          </div>
                           <div className="text-xs text-slate-500">
-                            {file.type.startsWith('video/') ? 'Video' : 'Ảnh'} • {(file.size / 1024 / 1024).toFixed(2)} MB
+                            {file.type.startsWith('video/') ? 'Video' : 'Anh'} •{' '}
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
                           </div>
                         </div>
                         <button
@@ -196,7 +210,7 @@ function CreatePostInner() {
                           onClick={() => removeFile(index)}
                           className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600"
                         >
-                          Xóa
+                          Xoa
                         </button>
                       </div>
                     </div>
@@ -211,7 +225,7 @@ function CreatePostInner() {
                 checked={isAnonymous}
                 onChange={(e) => setIsAnonymous(e.target.checked)}
               />
-              <label className="text-sm">Đăng bài ẩn danh</label>
+              <label className="text-sm">Dang bai an danh</label>
             </div>
 
             {error && (
@@ -225,7 +239,7 @@ function CreatePostInner() {
                 disabled={saving}
                 className="btn-primary rounded-full px-5 py-3 text-sm font-bold disabled:opacity-60"
               >
-                {saving ? 'Đang đăng...' : 'Đăng bài'}
+                {saving ? 'Dang dang...' : 'Dang bai'}
               </button>
             </div>
           </form>

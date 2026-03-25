@@ -114,7 +114,7 @@ export default function AdminTopics() {
 
     // ================= DELETE =================
     const handleDelete = async (id) => {
-        if (!window.confirm("Xóa topic?")) return;
+        if (!window.confirm("Xóa chủ đề?")) return;
 
         try {
             await axios.delete(
@@ -135,12 +135,12 @@ export default function AdminTopics() {
 
     return (
         <div className="p-6 space-y-6">
-            <h2 className="text-xl font-bold">Quản lý Topic</h2>
+            <h2 className="text-xl font-bold">Quản lý chủ đề</h2>
 
             {/* FORM */}
             <div className="border p-4 rounded">
                 <h3 className="mb-2 font-semibold">
-                    {editingId ? "Update Topic" : "Create Topic"}
+                    {editingId ? "Cập nhật chủ đề" : "Tạo chủ đề"}
                 </h3>
 
                 <input
@@ -197,7 +197,7 @@ export default function AdminTopics() {
                         <th className="border p-2">Name</th>
                         <th className="border p-2">Slug</th>
                         <th className="border p-2">Category</th>
-                        <th className="border p-2">Action</th>
+                        <th className="border p-2">Hành động</th>
                     </tr>
                 </thead>
 
@@ -219,14 +219,14 @@ export default function AdminTopics() {
                                     className="bg-yellow-500 text-white px-2 mr-2"
                                     onClick={() => handleEdit(t)}
                                 >
-                                    Edit
+                                    Sửa
                                 </button>
 
                                 <button
                                     className="bg-red-600 text-white px-2"
                                     onClick={() => handleDelete(t._id)}
                                 >
-                                    Delete
+                                    Xóa
                                 </button>
                             </td>
                         </tr>

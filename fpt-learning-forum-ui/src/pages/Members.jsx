@@ -77,7 +77,12 @@ export default function Members() {
                 isFollowing: next.isFollowing,
                 followerCount: next.followerCount ?? u.followerCount
               }
-            : u
+            : String(u._id) === String(user?._id)
+              ? {
+                  ...u,
+                  followingCount: next.viewerFollowingCount ?? u.followingCount
+                }
+              : u
         )
       )
     } catch (err) {

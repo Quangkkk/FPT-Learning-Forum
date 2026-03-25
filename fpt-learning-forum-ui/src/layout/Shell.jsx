@@ -10,6 +10,11 @@ function TopBar() {
   const loc = useLocation()
   const [q, setQ] = React.useState('')
 
+  React.useEffect(() => {
+    const params = new URLSearchParams(loc.search)
+    setQ(params.get('q') || '')
+  }, [loc.pathname, loc.search])
+
   function submit(e) {
     e.preventDefault()
     const next = q.trim()
@@ -55,7 +60,7 @@ function TopBar() {
               const value = e.target.value
               setQ(value)
 
-              if (value.trim() === '') {
+              if (value.trim() === '' && loc.pathname === '/search') {
                 nav('/')
               }
             }}
@@ -178,7 +183,11 @@ function RightSidebar() {
 
     fetch(`/api/search/users?q=${encodeURIComponent(keyword)}`)
       .then((res) => res.json())
-      .then((data) => setUsers(data))
+      .then((data) => setUsers(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error(err)
+        setUsers([])
+      })
   }, [keyword])
 
   return (
@@ -213,7 +222,7 @@ function RightSidebar() {
 
         <div className="app-surface rounded-[28px] p-5">
           <div className="section-kicker">Highlights</div>
-          <div className="mt-2 text-sm font-semibold">Môn học nổi bật</div>
+          <div className="mt-2 text-sm font-semibold">Chủ đề nổi bật</div>
 
           <div className="mt-3 space-y-2">
             {forum?.topics &&
