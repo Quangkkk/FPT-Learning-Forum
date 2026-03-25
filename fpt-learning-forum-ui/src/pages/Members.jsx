@@ -73,15 +73,15 @@ export default function Members() {
         prev.map((u) =>
           String(u._id) === String(targetId)
             ? {
-                ...u,
-                isFollowing: next.isFollowing,
-                followerCount: next.followerCount ?? u.followerCount
-              }
+              ...u,
+              isFollowing: next.isFollowing,
+              followerCount: next.followerCount ?? u.followerCount
+            }
             : String(u._id) === String(user?._id)
               ? {
-                  ...u,
-                  followingCount: next.viewerFollowingCount ?? u.followingCount
-                }
+                ...u,
+                followingCount: next.viewerFollowingCount ?? u.followingCount
+              }
               : u
         )
       )
@@ -149,11 +149,10 @@ export default function Members() {
                     <button
                       type="button"
                       onClick={() => toggleUser(u._id)}
-                      className={`shrink-0 rounded-xl px-3 py-1 text-sm ${
-                        u.active ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
-                      }`}
+                      className={`shrink-0 rounded-xl px-3 py-1 text-sm ${!u.active ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+                        }`}
                     >
-                      {u.active ? 'Khóa' : 'Mở'}
+                      {u.active ? 'Mở' : 'Khóa'}
                     </button>
                   )}
                 </div>
@@ -195,9 +194,8 @@ export default function Members() {
                         type="button"
                         disabled={followBusyId === String(u._id)}
                         onClick={() => toggleFollow(u._id, u.isFollowing)}
-                        className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60 ${
-                          u.isFollowing ? 'bg-slate-500' : 'bg-[var(--fpt-blue)]'
-                        }`}
+                        className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60 ${u.isFollowing ? 'bg-slate-500' : 'bg-[var(--fpt-blue)]'
+                          }`}
                       >
                         {u.isFollowing ? (
                           <>

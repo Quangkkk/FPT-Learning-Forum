@@ -10,7 +10,7 @@ const Category = require("../models/Category");
 // ================= USERS =================
 router.patch("/users/:id/toggle", verifyToken, verifyAdmin, async (req, res) => {
     try {
-        const user = await User.findById(req.params.id);
+        const user = await User.findById(req.params.id).select("_id active");
 
         if (!user) {
             return res.status(404).json({ message: "User không tồn tại" });
@@ -20,12 +20,15 @@ router.patch("/users/:id/toggle", verifyToken, verifyAdmin, async (req, res) => 
             return res.status(400).json({ message: "Không thể tự khóa chính mình" });
         }
 
-        user.active = !user.active;
-        await user.save();
+        const updatedUser = await User.findByIdAndUpdate(
+            req.params.id,
+            { $set: { active: !(user.active === true) } },
+            { new: true }
+        );
 
         res.json({
-            message: user.active ? "Đã kích hoạt user" : "Đã khóa user",
-            user
+            message: updatedUser.active ? "Đã kích hoạt user" : "Đã khóa user",
+            user: updatedUser
         });
 
     } catch (err) {
@@ -45,7 +48,7 @@ router.patch("/users/:id/role", verifyToken, verifyAdmin, async (req, res) => {
             });
         }
 
-        const user = await User.findById(req.params.id);
+        const user = await User.findById(req.params.id).select("_id role");
         if (!user) {
             return res.status(404).json({ message: "User không tồn tại" });
         }
@@ -54,12 +57,15 @@ router.patch("/users/:id/role", verifyToken, verifyAdmin, async (req, res) => {
             return res.status(400).json({ message: "Không thể tự đổi role của chính mình" });
         }
 
-        user.role = role;
-        await user.save();
+        const updatedUser = await User.findByIdAndUpdate(
+            req.params.id,
+            { $set: { role } },
+            { new: true }
+        );
 
         res.json({
             message: "Đổi role thành công",
-            user
+            user: updatedUser
         });
     } catch (err) {
         console.error("CHANGE USER ROLE ERROR:", err);
